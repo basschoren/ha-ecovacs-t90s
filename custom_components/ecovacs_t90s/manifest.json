@@ -1,6 +1,7 @@
 {
   "domain": "ecovacs_t90s",
   "name": "Ecovacs DEEBOT T90S",
+  "after_dependencies": ["matter"],
   "codeowners": ["@basschoren"],
   "config_flow": true,
   "documentation": "https://github.com/basschoren/ha-ecovacs-t90s",
@@ -13,5 +14,5 @@
     "aiortc==1.16.0",
     "websockets==15.0.1"
   ],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

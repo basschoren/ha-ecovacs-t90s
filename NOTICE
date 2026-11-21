@@ -22,9 +22,11 @@ vacuum.py (all under custom_components/ecovacs_t90s/).
 The files were modified: the legacy XMPP (py-sucks) robot support was
 removed, the domain was renamed to ecovacs_t90s, extra device classes are
 registered before discovery, the live view entities and options were added,
-and a raw_command service was added. The English texts are the resolved texts
-of the core integration, some Dutch texts are taken from the Home Assistant
-translations of that integration.
+a raw_command service was added, and (version 0.2.0) the vacuum uses the V2
+clean commands with a local Matter fallback, the map shows furniture, and
+entities for further robot settings were added. The English texts are the
+resolved texts of the core integration, some Dutch texts are taken from the
+Home Assistant translations of that integration.
 
 
 2. ECOVACS Live View
@@ -59,6 +61,16 @@ reuse of stored account credentials were local modifications of that project.
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
+
+
+3. Protocol information
+-----------------------
+No code was copied from the sources below; they document command names,
+payloads and the map coordinate transformation, which the files commands/*,
+map_overlay.py and vacuum.py describe with references:
+- deebot-client (https://github.com/DeebotUniverse/client.py): issues #555,
+  #1620, #2027, #2028 and pull requests #1860, #2030, src/map/mod.rs
+- ecovacs-deebot.js (https://github.com/mrbungle64/ecovacs-deebot.js)
 
 
 Runtime dependencies (not included in this repository)
