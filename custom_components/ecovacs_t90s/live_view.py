@@ -4,12 +4,16 @@ Taken from ``live_view.py`` of ECOVACS Live View
 (https://github.com/imcdo17-cyber/home-assistant-ecovacs-live, v0.8.4,
 Copyright (c) 2026 ECOVACS Live View contributors, MIT License, see NOTICE).
 
-Changes for the ecovacs_t90s integration, all in ``LiveViewManager``:
-- it asks for the current portal credentials before every start through
-  ``get_credentials`` (the shared, self-refreshing deebot-client
+Changes for the ecovacs_t90s integration:
+- ``LiveViewManager`` asks for the current portal credentials before every
+  start through ``get_credentials`` (the shared, self-refreshing deebot-client
   ``Authenticator``) instead of keeping the credentials of the setup login;
 - it refuses to start without a configured Live View PIN;
-- ``pin`` and ``auto_stop_minutes`` can be changed at runtime (options flow).
+- ``pin`` and ``auto_stop_minutes`` can be changed at runtime (options flow);
+- ``EcovacsLiveViewSession`` gets the HTTP session of its manager as an
+  argument. Upstream looked its manager up in ``hass.data["ecovacs_live"]``,
+  the storage of the upstream integration, which does not exist here (or
+  belongs to another integration when ECOVACS Live View is still installed).
 The protocol code is unchanged.
 """
 from __future__ import annotations
@@ -924,10 +928,13 @@ class EcovacsLiveViewSession:
         *,
         session_info: KinesisSession,
         robot: dict[str, Any],
+        http: Any,
     ) -> None:
         self.hass = hass
         self.session_info = session_info
         self.robot = robot
+        # aiohttp session for the Kinesis signalling requests (of the manager)
+        self.http = http
         self.pc: RTCPeerConnection | None = None
         self.websocket: Any = None
         self.silent_audio = SilentAudioTrack()
@@ -1130,11 +1137,7 @@ class EcovacsLiveViewSession:
     async def start(self, timeout: float = 30) -> bool:
         """Start WebRTC and wait for the first video frame."""
         self.status = "connecting"
-        http = self.hass.data["ecovacs_live"][next(
-            entry_id
-            for entry_id, runtime in self.hass.data["ecovacs_live"].items()
-            if self.robot in runtime.get("devices", [])
-        )]["manager"].http
+        http = self.http
         _LOGGER.debug(
             "ECOVACS WebRTC stage: describing Kinesis signaling channel"
         )
@@ -1550,6 +1553,7 @@ class LiveViewManager:
                 self.hass,
                 session_info=session_info,
                 robot=robot,
+                http=self.http,
             )
             self.sessions[did] = live
             self.status[did] = "connecting"
