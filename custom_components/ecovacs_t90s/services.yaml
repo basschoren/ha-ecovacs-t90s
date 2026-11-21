@@ -1,0 +1,34 @@
+raw_get_positions:
+  target:
+    entity:
+      domain: vacuum
+      integration: ecovacs_t90s
+
+raw_command:
+  target:
+    device:
+      integration: ecovacs_t90s
+    entity:
+      domain: vacuum
+      integration: ecovacs_t90s
+  fields:
+    command:
+      required: true
+      example: getCleanInfo_V2
+      selector:
+        text:
+    params:
+      required: false
+      example: '{"type": 1}'
+      selector:
+        object:
+    timeout:
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 300
+          step: 1
+          unit_of_measurement: s
+          mode: box

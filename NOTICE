@@ -1,0 +1,74 @@
+Ecovacs DEEBOT T90S - Home Assistant custom integration
+Copyright 2026 The ha-ecovacs-t90s contributors
+
+This project is licensed under the Apache License, Version 2.0 (see LICENSE).
+It contains code from the projects listed below. Every file derived from
+them says so in its module docstring, together with a summary of the changes.
+
+
+1. Home Assistant core - "ecovacs" integration
+-----------------------------------------------
+Source:  https://github.com/home-assistant/core
+         homeassistant/components/ecovacs at tag 2026.11.2
+License: Apache License, Version 2.0 (see LICENSE)
+Copyright: The Home Assistant authors
+
+Used in: __init__.py, binary_sensor.py, button.py, config_flow.py, const.py,
+controller.py, diagnostics.py, entity.py, event.py, icons.json, image.py,
+lawn_mower.py, number.py, select.py, sensor.py, services.py, services.yaml,
+strings.json, switch.py, translations/en.json, translations/nl.json, util.py,
+vacuum.py (all under custom_components/ecovacs_t90s/).
+
+The files were modified: the legacy XMPP (py-sucks) robot support was
+removed, the domain was renamed to ecovacs_t90s, extra device classes are
+registered before discovery, the live view entities and options were added,
+and a raw_command service was added. The English texts are the resolved texts
+of the core integration, some Dutch texts are taken from the Home Assistant
+translations of that integration.
+
+
+2. ECOVACS Live View
+--------------------
+Source:  https://github.com/imcdo17-cyber/home-assistant-ecovacs-live
+         custom_components/ecovacs_live at tag v0.8.4
+License: MIT License (full text below)
+
+Used in: live_view.py (protocol code, nearly unchanged), live_view_client.py,
+camera.py, and the live view entities in button.py, sensor.py and switch.py
+(all under custom_components/ecovacs_t90s/). The live view switch and the
+reuse of stored account credentials were local modifications of that project.
+
+    MIT License
+
+    Copyright (c) 2026 ECOVACS Live View contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+Runtime dependencies (not included in this repository)
+-------------------------------------------------------
+Home Assistant installs these from PyPI as listed in manifest.json:
+- deebot-client (https://github.com/DeebotUniverse/client.py),
+  GNU General Public License v3.0 or later
+- aiortc (https://github.com/aiortc/aiortc), BSD 3-Clause License
+- websockets (https://github.com/python-websockets/websockets),
+  BSD 3-Clause License
+
+This project is not affiliated with, endorsed by or supported by ECOVACS,
+the Home Assistant project or the authors of the projects above.

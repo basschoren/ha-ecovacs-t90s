@@ -1,0 +1,533 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Account is al geconfigureerd",
+      "reauth_successful": "Opnieuw authenticeren is gelukt"
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken",
+      "invalid_auth": "Ongeldige authenticatie",
+      "invalid_url": "Ongeldige URL",
+      "invalid_url_schema_override_mqtt_url": "Ongeldig MQTT URL-schema.\nDe URL moet beginnen met `mqtt://` of `mqtts://`.",
+      "invalid_url_schema_override_rest_url": "Ongeldig REST URL-schema.\nDe URL moet beginnen met `http://` of `https://`.",
+      "invalid_verification_code": "De verificatiecode is ongeldig of verlopen.",
+      "unknown": "Onverwachte fout"
+    },
+    "step": {
+      "auth": {
+        "data": {
+          "country": "Land",
+          "live_view_pin": "Live View-pincode (optioneel)",
+          "override_mqtt_url": "MQTT URL",
+          "override_rest_url": "REST URL",
+          "password": "Wachtwoord",
+          "username": "Gebruikersnaam",
+          "verify_mqtt_certificate": "Verifieer MQTT SSL-certificaat"
+        },
+        "data_description": {
+          "live_view_pin": "De pincode die de robotcamera in de Ecovacs-app beveiligt. Nodig voor het live camerabeeld; je kunt hem ook later instellen via Configureren.",
+          "override_mqtt_url": "Voer de MQTT URL van je zelf gehoste instantie in, inclusief het schema (mqtt/mqtts).",
+          "override_rest_url": "Voer de REST URL van je zelf gehoste instantie in, inclusief het schema (http/https)."
+        }
+      },
+      "device_verification": {
+        "data": {
+          "verification_code": "Verificatiecode"
+        },
+        "description": "Voer de verificatiecode in die Ecovacs naar {username} heeft gestuurd om Home Assistant als vertrouwd apparaat te bevestigen."
+      },
+      "reauth_confirm": {
+        "data": {
+          "password": "Wachtwoord"
+        },
+        "description": "Voer het Ecovacs-wachtwoord voor {username} in om de integratie opnieuw te verbinden."
+      },
+      "user": {
+        "data": {
+          "mode": "Modus"
+        },
+        "data_description": {
+          "mode": "Kies hoe je met Ecovacs wilt verbinden. Kies **Cloud** als je het niet zeker weet.\n\nKies **Zelf gehost** alleen als je een werkende zelf gehoste instantie hebt."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "water_mop_attached": {
+        "name": "Mop bevestigd"
+      }
+    },
+    "button": {
+      "relocate": {
+        "name": "Herlokaliseren"
+      },
+      "reset_lifespan_air_freshener": {
+        "name": "Levensduur luchtverfrisser resetten"
+      },
+      "reset_lifespan_blade": {
+        "name": "Levensduur maaimes resetten"
+      },
+      "reset_lifespan_brush": {
+        "name": "Levensduur hoofdborstel resetten"
+      },
+      "reset_lifespan_cleaning_solution": {
+        "name": "Levensduur reinigingsmiddel resetten"
+      },
+      "reset_lifespan_dust_bag": {
+        "name": "Levensduur stofzak resetten"
+      },
+      "reset_lifespan_dust_bucket": {
+        "name": "Levensduur stofemmer resetten"
+      },
+      "reset_lifespan_dust_case_heap": {
+        "name": "Levensduur stofbakfilter resetten"
+      },
+      "reset_lifespan_dust_container_filter": {
+        "name": "Levensduur stofcontainerfilter resetten"
+      },
+      "reset_lifespan_filter": {
+        "name": "Levensduur filter resetten"
+      },
+      "reset_lifespan_hand_filter": {
+        "name": "Levensduur handfilter resetten"
+      },
+      "reset_lifespan_heavy_duty_cleaning_solution": {
+        "name": "Levensduur krachtig reinigingsmiddel resetten"
+      },
+      "reset_lifespan_lens_brush": {
+        "name": "Levensduur lensborstel resetten"
+      },
+      "reset_lifespan_mop_washing_tray": {
+        "name": "Levensduur mopwasbak resetten"
+      },
+      "reset_lifespan_round_mop": {
+        "name": "Levensduur ronde mop resetten"
+      },
+      "reset_lifespan_sewage_box": {
+        "name": "Levensduur vuilwaterbak resetten"
+      },
+      "reset_lifespan_side_brush": {
+        "name": "Levensduur zijborstel resetten"
+      },
+      "reset_lifespan_station_filter": {
+        "name": "Levensduur stationfilter resetten"
+      },
+      "reset_lifespan_strainer": {
+        "name": "Levensduur zeef resetten"
+      },
+      "reset_lifespan_trimmer_brush": {
+        "name": "Levensduur randtrimmerborstel resetten"
+      },
+      "reset_lifespan_unit_care": {
+        "name": "Levensduur onderhoud resetten"
+      },
+      "reset_lifespan_uv_sanitizer": {
+        "name": "Levensduur UV-desinfectie resetten"
+      },
+      "reset_lifespan_water_sink": {
+        "name": "Levensduur waterbak resetten"
+      },
+      "reset_lifespan_weed_rope": {
+        "name": "Levensduur trimmerdraad resetten"
+      },
+      "start_live_view": {
+        "name": "Live view starten"
+      },
+      "station_action_clean_base": {
+        "name": "Basis reinigen"
+      },
+      "station_action_dry_mop": {
+        "name": "Mop drogen"
+      },
+      "station_action_empty_dustbin": {
+        "name": "Stofbak legen"
+      },
+      "station_action_wash_mop": {
+        "name": "Mop wassen"
+      },
+      "stop_live_view": {
+        "name": "Live view stoppen"
+      }
+    },
+    "camera": {
+      "live_view": {
+        "name": "Live view"
+      }
+    },
+    "event": {
+      "last_job": {
+        "name": "Laatste taak",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "finished": "Voltooid",
+              "finished_with_warnings": "Voltooid met waarschuwingen",
+              "manually_stopped": "Handmatig gestopt"
+            }
+          }
+        }
+      }
+    },
+    "image": {
+      "map": {
+        "name": "Kaart"
+      }
+    },
+    "number": {
+      "clean_count": {
+        "name": "Aantal reinigingen"
+      },
+      "cut_direction": {
+        "name": "Maairichting"
+      },
+      "mop_wash_interval": {
+        "name": "Mopwasinterval"
+      },
+      "volume": {
+        "name": "Volume"
+      },
+      "water_amount": {
+        "name": "Waterdoorstroming"
+      }
+    },
+    "select": {
+      "active_map": {
+        "name": "Actieve kaart"
+      },
+      "auto_empty": {
+        "name": "Frequentie automatisch legen",
+        "state": {
+          "auto": "Automatisch",
+          "min_10": "10 minuten",
+          "min_15": "15 minuten",
+          "min_25": "25 minuten",
+          "smart": "Slim"
+        }
+      },
+      "efficiency_mode": {
+        "name": "Efficiëntiemodus",
+        "state": {
+          "energy_efficient_mode": "Energiezuinig",
+          "standard_mode": "Standaard"
+        }
+      },
+      "water_amount": {
+        "name": "Waterdoorstroming",
+        "state": {
+          "high": "Hoog",
+          "low": "Laag",
+          "medium": "Gemiddeld",
+          "ultrahigh": "Extra hoog"
+        }
+      },
+      "work_mode": {
+        "name": "Werkmodus",
+        "state": {
+          "mop": "Dweilen",
+          "mop_after_vacuum": "Dweilen na stofzuigen",
+          "vacuum": "Stofzuigen",
+          "vacuum_and_mop": "Stofzuigen en dweilen"
+        }
+      }
+    },
+    "sensor": {
+      "error": {
+        "name": "Fout",
+        "state_attributes": {
+          "description": {
+            "name": "Beschrijving"
+          }
+        }
+      },
+      "lifespan_air_freshener": {
+        "name": "Levensduur luchtverfrisser"
+      },
+      "lifespan_blade": {
+        "name": "Levensduur maaimes"
+      },
+      "lifespan_brush": {
+        "name": "Levensduur hoofdborstel"
+      },
+      "lifespan_cleaning_solution": {
+        "name": "Levensduur reinigingsmiddel"
+      },
+      "lifespan_dust_bag": {
+        "name": "Levensduur stofzak"
+      },
+      "lifespan_dust_bucket": {
+        "name": "Levensduur stofemmer"
+      },
+      "lifespan_dust_case_heap": {
+        "name": "Levensduur stofbakfilter"
+      },
+      "lifespan_dust_container_filter": {
+        "name": "Levensduur stofcontainerfilter"
+      },
+      "lifespan_filter": {
+        "name": "Levensduur filter"
+      },
+      "lifespan_hand_filter": {
+        "name": "Levensduur handfilter"
+      },
+      "lifespan_heavy_duty_cleaning_solution": {
+        "name": "Levensduur krachtig reinigingsmiddel"
+      },
+      "lifespan_lens_brush": {
+        "name": "Levensduur lensborstel"
+      },
+      "lifespan_mop_washing_tray": {
+        "name": "Levensduur mopwasbak"
+      },
+      "lifespan_round_mop": {
+        "name": "Levensduur ronde mop"
+      },
+      "lifespan_sewage_box": {
+        "name": "Levensduur vuilwaterbak"
+      },
+      "lifespan_side_brush": {
+        "name": "Levensduur zijborstel"
+      },
+      "lifespan_station_filter": {
+        "name": "Levensduur stationfilter"
+      },
+      "lifespan_strainer": {
+        "name": "Levensduur zeef"
+      },
+      "lifespan_trimmer_brush": {
+        "name": "Levensduur randtrimmerborstel"
+      },
+      "lifespan_unit_care": {
+        "name": "Levensduur onderhoud"
+      },
+      "lifespan_uv_sanitizer": {
+        "name": "Levensduur UV-desinfectie"
+      },
+      "lifespan_water_sink": {
+        "name": "Levensduur waterbak"
+      },
+      "lifespan_weed_rope": {
+        "name": "Levensduur trimmerdraad"
+      },
+      "live_view_status": {
+        "name": "Live view-status",
+        "state": {
+          "auto_stopped": "Automatisch gestopt",
+          "closed": "Verbinding gesloten",
+          "connected_waiting_video": "Wachten op beeld",
+          "connecting": "Verbinden",
+          "error": "Fout",
+          "failed": "Verbinding mislukt",
+          "idle": "Inactief",
+          "requesting_session": "Sessie aanvragen",
+          "starting": "Starten",
+          "stopped": "Gestopt",
+          "timeout_waiting_video": "Time-out bij wachten op beeld",
+          "video_received": "Live"
+        },
+        "state_attributes": {
+          "auto_stop_remaining_seconds": {
+            "name": "Automatisch stoppen over"
+          },
+          "last_error": {
+            "name": "Laatste fout"
+          },
+          "session_elapsed_seconds": {
+            "name": "Sessieduur"
+          },
+          "streaming": {
+            "name": "Streamt"
+          },
+          "video_frames": {
+            "name": "Videobeelden"
+          }
+        }
+      },
+      "network_ip": {
+        "name": "IP-adres"
+      },
+      "network_rssi": {
+        "name": "Wifi-RSSI"
+      },
+      "network_ssid": {
+        "name": "Wifi-SSID"
+      },
+      "station_state": {
+        "name": "Stationstatus",
+        "state": {
+          "drying_mop": "Mop drogen",
+          "emptying_dustbin": "Stofbak legen",
+          "idle": "Inactief",
+          "washing_mop": "Mop wassen"
+        }
+      },
+      "stats_area": {
+        "name": "Gereinigd oppervlak"
+      },
+      "stats_area_mower": {
+        "name": "Gemaaid oppervlak"
+      },
+      "stats_time": {
+        "name": "Reinigingsduur"
+      },
+      "stats_time_mower": {
+        "name": "Maaiduur"
+      },
+      "total_stats_area": {
+        "name": "Totaal gereinigd oppervlak"
+      },
+      "total_stats_area_mower": {
+        "name": "Totaal gemaaid oppervlak"
+      },
+      "total_stats_cleanings": {
+        "name": "Totaal aantal reinigingen"
+      },
+      "total_stats_cleanings_mower": {
+        "name": "Totaal aantal maaibeurten"
+      },
+      "total_stats_time": {
+        "name": "Totale reinigingsduur"
+      },
+      "total_stats_time_mower": {
+        "name": "Totale maaiduur"
+      }
+    },
+    "switch": {
+      "advanced_mode": {
+        "name": "Geavanceerde modus"
+      },
+      "auto_empty": {
+        "name": "Automatisch legen"
+      },
+      "border_spin": {
+        "name": "Randdraai"
+      },
+      "border_switch": {
+        "name": "Randschakelaar"
+      },
+      "carpet_auto_fan_boost": {
+        "name": "Automatische zuigkrachtverhoging op tapijt"
+      },
+      "child_lock": {
+        "name": "Kinderslot"
+      },
+      "clean_preference": {
+        "name": "Reinigingsvoorkeur"
+      },
+      "continuous_cleaning": {
+        "name": "Doorgaan met reinigen"
+      },
+      "cross_map_border_warning": {
+        "name": "Waarschuwing bij overschrijden kaartgrens"
+      },
+      "live_view": {
+        "name": "Live view"
+      },
+      "move_up_warning": {
+        "name": "Waarschuwing bij optillen"
+      },
+      "safe_protect": {
+        "name": "Veilige bescherming"
+      },
+      "true_detect": {
+        "name": "True Detect"
+      }
+    },
+    "vacuum": {
+      "vacuum": {
+        "state_attributes": {
+          "fan_speed": {
+            "state": {
+              "max": "Max",
+              "max_plus": "Max+",
+              "normal": "Normaal",
+              "quiet": "Stil"
+            }
+          },
+          "rooms": {
+            "name": "Kamers"
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "device_verification_required": {
+      "message": "Apparaatverificatie vereist"
+    },
+    "invalid_auth": {
+      "message": "Ongeldige inloggegevens"
+    },
+    "raw_command_empty": {
+      "message": "Het commando mag niet leeg zijn."
+    },
+    "raw_command_one_target": {
+      "message": "Kies precies één robot: één apparaat of één stofzuigerentiteit van deze integratie."
+    },
+    "raw_command_unknown_target": {
+      "message": "{target} is geen robot van een geladen Ecovacs DEEBOT T90S-configuratie."
+    },
+    "setup_error": {
+      "message": "Fout tijdens het instellen"
+    },
+    "vacuum_raw_get_positions_not_supported": {
+      "message": "Het opvragen van de posities van de laadstations en het apparaat zelf wordt niet ondersteund"
+    },
+    "vacuum_send_command_not_supported": {
+      "message": "Het commando {command} wordt niet ondersteund door {name}"
+    },
+    "vacuum_send_command_params_dict": {
+      "message": "Params moet een dictionary zijn en geen lijst"
+    },
+    "vacuum_send_command_params_required": {
+      "message": "Params zijn vereist voor het commando: {command}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "auto_stop_minutes": "Live view automatisch stoppen na",
+          "live_view_pin": "Live View-pincode"
+        },
+        "data_description": {
+          "auto_stop_minutes": "In minuten. 0 schakelt automatisch stoppen uit.",
+          "live_view_pin": "De pincode die de robotcamera in de Ecovacs-app beveiligt. Laat leeg als je live view niet gebruikt."
+        },
+        "title": "Live view"
+      }
+    }
+  },
+  "selector": {
+    "installation_mode": {
+      "options": {
+        "cloud": "Cloud",
+        "self_hosted": "Zelf gehost"
+      }
+    }
+  },
+  "services": {
+    "raw_command": {
+      "description": "Stuurt een JSON-commando via deebot-client naar de robot en geeft het onbewerkte antwoord terug. Bedoeld voor debuggen en het verkennen van ongedocumenteerde commando's; een verkeerd commando kan robotinstellingen wijzigen.",
+      "fields": {
+        "command": {
+          "description": "Naam van het commando, bijvoorbeeld getCleanInfo_V2.",
+          "name": "Commando"
+        },
+        "params": {
+          "description": "JSON-object (of lijst) dat als data van het commando wordt meegestuurd. Laat leeg om niets mee te sturen.",
+          "name": "Parameters"
+        },
+        "timeout": {
+          "description": "Aantal seconden dat op het antwoord wordt gewacht.",
+          "name": "Time-out"
+        }
+      },
+      "name": "Onbewerkt commando sturen"
+    },
+    "raw_get_positions": {
+      "description": "Haalt een onbewerkt antwoord op met de posities van de laadstations en het apparaat zelf.",
+      "name": "Onbewerkte posities ophalen"
+    }
+  }
+}

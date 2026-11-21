@@ -1,0 +1,17 @@
+{
+  "domain": "ecovacs_t90s",
+  "name": "Ecovacs DEEBOT T90S",
+  "codeowners": ["@basschoren"],
+  "config_flow": true,
+  "documentation": "https://github.com/basschoren/ha-ecovacs-t90s",
+  "integration_type": "hub",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/basschoren/ha-ecovacs-t90s/issues",
+  "loggers": ["deebot_client", "aiortc", "aioice", "websockets"],
+  "requirements": [
+    "deebot-client==18.7.0",
+    "aiortc==1.16.0",
+    "websockets==15.0.1"
+  ],
+  "version": "0.1.0"
+}
