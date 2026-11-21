@@ -1,0 +1,26 @@
+{
+  "_comment": "body.data of get commands on a DEEBOT T90S PRO OMNI (833gj5, fw 1.50.62), read with ecovacs_t90s.raw_command. null = answered with 20003 rcp not support. Ids are placeholders.",
+  "getWashInfo": {"amount": 1, "dryMop": 0, "duration": 60, "interval": 15, "mode": 1, "wiseMode": 2},
+  "getDryingDuration": {"duration": 180},
+  "getMopExpandState": {"enable": 1, "level": 1},
+  "getCustomAreaMode": {"sweepMode": 0},
+  "getTrueDetect": {"enable": 1, "level": 1},
+  "getBlock": {"enable": 0, "end": "8:0", "start": "22:0"},
+  "getWorkMode": {"mode": 1},
+  "getQuickCommand": [{"array": [], "mid": "100000001", "sort": "", "supportBatchDel": 1}],
+  "getChargeState": {"chargeRate": 6, "isCharging": 1, "mode": "autoEmpty"},
+  "getStationState": {"content": {"error": [314], "motionState": 0, "subContent": {"handEmpty": {}}, "type": 0}, "state": 0},
+  "getCarpetInfo": null,
+  "getCleanInfo": null,
+  "getCleanInfo_V2": null,
+  "getCachedMapInfo": {
+    "enable": 1,
+    "info": [
+      {"mid": "100000001", "index": 0, "status": 1, "using": 1, "built": 1, "name": ""},
+      {"mid": "0", "index": 1, "status": 0, "using": 0, "built": 0, "name": ""},
+      {"mid": "0", "index": 2, "status": 0, "using": 0, "built": 0, "name": ""},
+      {"mid": "0", "index": 3, "status": 0, "using": 0, "built": 0, "name": ""}
+    ]
+  },
+  "getPos": {"deebotPos": {"a": -106, "invalid": 0, "x": 353, "y": -5038}, "chargePos": [{"a": 0, "invalid": 1, "x": -123, "y": -15}]}
+}

@@ -7,6 +7,7 @@ Run from the repository root with ``pytest tests`` in an environment with
 """
 
 from collections.abc import AsyncGenerator, Generator
+import inspect
 import os
 import pathlib
 import sys
@@ -187,6 +188,108 @@ async def init_integration(
     mock_device_execute: AsyncMock,
 ) -> AsyncGenerator[MockConfigEntry]:
     """Set up the integration."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    yield mock_config_entry
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+
+# ---------------------------------------------------------------- fake robot
+
+FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+
+
+def load_fixture(name: str) -> Any:
+    """Return a JSON fixture of tests/fixtures."""
+    import json
+
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def robot_ok(data: Any = None) -> dict[str, Any]:
+    """Answer of a robot that executed a command."""
+    body: dict[str, Any] = {"code": 0, "msg": "ok"}
+    if data is not None:
+        body["data"] = data
+    return {"ret": "ok", "resp": {"header": {"ver": "0.0.1"}, "body": body}}
+
+
+def robot_unsupported() -> dict[str, Any]:
+    """Answer of a robot that does not know a command."""
+    return {
+        "ret": "ok",
+        "resp": {"header": {}, "body": {"code": 20003, "msg": "rcp not support"}},
+    }
+
+
+def robot_no_answer() -> dict[str, Any]:
+    """Cloud answer when the robot does not answer in time."""
+    return {"ret": "fail", "errno": 500, "error": "timeout"}
+
+
+class FakeRobot:
+    """Answers device commands by command name and records them."""
+
+    def __init__(self) -> None:
+        """Initialize with answers that keep deebot-client quiet."""
+        self.sent: list[tuple[str, Any]] = []
+        self.answers: dict[str, Any] = {
+            "getBattery": robot_ok({"value": 100, "isLow": 0}),
+            "getChargeState": robot_ok({"isCharging": 1, "mode": "autoEmpty"}),
+        }
+        self.default: Any = robot_ok({})
+        self.clean_logs: list[dict[str, Any]] = []
+
+    def answer(self, name: str, args: Any) -> dict[str, Any]:
+        """Return the answer to a command."""
+        self.sent.append((name, args))
+        answer = self.answers.get(name, self.default)
+        if isinstance(answer, BaseException):
+            raise answer
+        if callable(answer):
+            answer = answer(args)
+        return answer
+
+    def calls(self, name: str) -> list[Any]:
+        """Return the arguments of all commands with this name."""
+        return [args for sent, args in self.sent if sent == name]
+
+
+@pytest.fixture
+def robot(mock_authenticator: Mock) -> FakeRobot:
+    """Answer device commands with a FakeRobot."""
+    fake = FakeRobot()
+    original = mock_authenticator.post_authenticated.side_effect
+
+    async def post_authenticated(
+        path: str, json: dict[str, Any], **kwargs: Any
+    ) -> dict[str, Any]:
+        if path == const.PATH_API_IOT_DEVMANAGER:
+            payload = json.get("payload") or {}
+            data = payload.get("body", {}).get("data") if payload else None
+            answer = fake.answer(json["cmdName"], data)
+            if inspect.isawaitable(answer):
+                answer = await answer
+            return answer
+        if path == const.PATH_API_LG_LOG:
+            return {"ret": "ok", "logs": fake.clean_logs}
+        return await original(path, json, **kwargs)
+
+    mock_authenticator.post_authenticated.side_effect = post_authenticated
+    return fake
+
+
+@pytest.fixture
+async def init_robot(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_authenticator: Mock,
+    mock_mqtt_client: Mock,
+    robot: FakeRobot,
+) -> AsyncGenerator[MockConfigEntry]:
+    """Set up the integration with commands answered by the fake robot."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
