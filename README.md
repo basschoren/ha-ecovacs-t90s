@@ -253,14 +253,39 @@ On a DEEBOT T90S PRO OMNI (fw 1.50.62), by the owner:
 - the answers of `getFurnitureInfo_V2`, `getWashInfo`, `getDryingDuration`,
   `getMopExpandState`, `getCustomAreaMode`, `getTrueDetect`, `getBlock`,
   `getQuickCommand` and `getCachedMapInfo` (used as test data);
-- the Matter twin exists with the same serial number.
+- the Matter twin exists with the same serial number;
+- with version 0.2.0 (2026-11-21, vacuum-only run): start, pause, resume,
+  stop and return to dock through the normal vacuum buttons (`clean_V2`
+  `start`/`pause`/`resume`/`stop` all answer and the robot follows; stop is
+  **not** ignored on the T90S), the state matching the Matter twin at every
+  step, the live view receiving video, the furniture layer on the real map
+  (positions match the Ecovacs app), the extra selects and switches showing
+  the robot's current values, and the Matter twin being found
+  ("Local fallback: available").
 
 Not yet verified on the robot (taken from captures of the T90 PRO OMNI and
 other models in deebot-client issues #2027, #2028, #555, PR #1860, PR #2030
-and ecovacs-deebot.js): `clean_V2` pause, resume and stop, `freeClean` rooms
-and rectangles, `qcClean`, every `set...` command above, the station stop
-buttons, the furniture drawing on the real map, the Matter fallback during a
-real outage, the clean log image.
+and ecovacs-deebot.js): `freeClean` rooms and rectangles, `qcClean`, every
+`set...` command above (only the `get...` side was checked), the station stop
+buttons, the clean log image.
+
+### Matter fallback: not tested without internet
+
+The offline fallback has **not** been tested during a real outage. One
+attempt on 2026-11-21 was abandoned: blocking the robot's internet access with
+a parental-control profile in the TP-Link Deco app had no effect (the robot
+kept answering through the Ecovacs cloud, most likely because the robot was
+not the device in the profile), so the cloud never went down and nothing was
+routed to Matter. What is known: the Matter twin is detected and linked, and
+the routing logic passes its tests against mocked APIs. What is not known:
+whether "Cloud connection" turns off in time, and whether start, stop and
+dock really run through Matter when the cloud is unreachable.
+
+To test it yourself: set the robot to vacuum only, cut the internet (block the
+robot in your router, or unplug the modem's WAN cable), wait a minute, check
+that **Cloud connection** is off and the vacuum attribute `control_path` shows
+`local`, then press start and return to dock. Please report the result in an
+issue.
 
 ## Supporting another robot model
 
@@ -297,8 +322,10 @@ numbers and robot names; they include the state of the extra features
 - Most new features are not verified on a real robot yet, see "What is
   verified".
 - Stop: a T90 PRO OMNI of another hardware class (twunby) ignored
-  `clean_V2 {"act": "stop"}` in deebot-client PR #1860; whether the T90S does
-  is not known yet. **Return to dock** always works.
+  `clean_V2 {"act": "stop"}` in deebot-client PR #1860. On the T90S (`833gj5`)
+  stop works. **Return to dock** always works.
+- The Matter fallback is untested without internet, see "Matter fallback: not
+  tested without internet".
 - The integration cannot start while the Ecovacs cloud is unreachable (see
   the Matter section).
 - The live view uses private Ecovacs/AWS Kinesis APIs and can break when
@@ -351,7 +378,10 @@ ECOVACS Live View en ondersteuning voor de T90S (apparaatklasse `833gj5`).
   starten, pauzeren, stoppen, terug naar het station, lokaliseren en
   kamers (Ruimte schoonmaken) via Matter en toont de stofzuiger de status van
   Matter. Kaart, camera, stationsbediening en instellingen zijn dan niet
-  beschikbaar. Nog niet getest tijdens een echte storing.
+  beschikbaar. **Nog niet getest zonder internet:** een poging op 21-11-2026
+  is gestaakt omdat het blokkeren van de robot in de TP-Link Deco-app geen
+  effect had. Zie "Matter fallback: not tested without internet" hierboven
+  voor wat wel en niet bekend is en hoe je het zelf test.
 - **Extra instellingen:** watertemperatuur en droogduur van de dweilen,
   schoonmaaksnelheid, randdweilen, TrueDetect-gevoeligheid, niet storen,
   spraakassistent, alleen dweilen, automatische updates, knoppen om wassen of
