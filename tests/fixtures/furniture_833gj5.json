@@ -1,0 +1,14 @@
+{
+  "_comment": "body.data of getFurnitureInfo_V2 on a DEEBOT T90S PRO OMNI (833gj5, fw 1.50.62). 8 of the 11 items the robot reported; the map id is a placeholder.",
+  "mid": "100000001",
+  "info": [
+    {"content": "-30,-6229;-30,-9432;2095,-9432;2095,-6229;20", "direction": "", "edited": 0, "fid": 3, "info": "", "source": 0, "type": 20},
+    {"content": "2930,-120;2930,-930;3900,-930;3900,-120;20", "direction": "", "edited": 1, "fid": 2, "info": "", "source": 0, "type": 20},
+    {"content": "3175,-184;3695,-184;3695,416;3175,416;1014", "direction": "", "edited": 0, "fid": 1, "info": "1014_1,undefined,270,0,1,0", "source": 0, "type": 1014},
+    {"content": "598,-2793;1631,-2793;1631,-584;598,-584;4", "direction": "", "edited": 0, "fid": 4, "info": "4_1,undefined,270,0,1,0", "source": 0, "type": 4},
+    {"content": "-718,-9432;-718,-6127;216,-6127;216,-8432;840,-8432;840,-9432;2", "direction": "", "edited": 0, "fid": 5, "info": "2_4,undefined,90,0,1,0", "source": 0, "type": 2},
+    {"content": "3361,-5750;3361,-5610;3041,-5610;3041,-5750;1015", "direction": "", "edited": 0, "fid": 6, "info": "1015_1,undefined,0,0,1,0", "source": 0, "type": 1015},
+    {"content": "191,-3023;-428,-3023;-428,-3779;191,-3779;1006", "direction": "", "edited": 0, "fid": 8, "info": "1006_1,undefined,90,0,1,0", "source": 0, "type": 1006},
+    {"content": "4592,-2780;5322,-2780;5322,-1604;4592,-1604;1005", "direction": "", "edited": 0, "fid": 9, "info": "1005_1,undefined,270,0,1,0", "source": 0, "type": 1005}
+  ]
+}
