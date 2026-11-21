@@ -1,8 +1,10 @@
 """Ecovacs services.
 
 ``raw_get_positions`` is from the Home Assistant core ``ecovacs`` integration
-(Apache-2.0), see NOTICE. ``raw_command`` is new: a debug service that sends an
-arbitrary JSON command to a robot and returns the raw answer.
+(Apache-2.0), see NOTICE. New: ``raw_command``, a debug service that sends an
+arbitrary JSON command to a robot and returns the raw answer; ``clean_zone``
+(rectangles and rooms in one job) and ``start_scenario`` (saved scenario of
+the app) for the vacuum entity.
 """
 
 import asyncio
@@ -40,6 +42,13 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_RAW_GET_POSITIONS = "raw_get_positions"
 SERVICE_RAW_COMMAND = "raw_command"
+SERVICE_CLEAN_ZONE = "clean_zone"
+SERVICE_START_SCENARIO = "start_scenario"
+
+ATTR_ZONES = "zones"
+ATTR_ROOMS = "rooms"
+ATTR_SCENARIO_ID = "scenario_id"
+MAX_ZONES = 10
 
 ATTR_COMMAND = "command"
 ATTR_PARAMS = "params"
@@ -102,6 +111,32 @@ def async_setup_services(hass: HomeAssistant) -> None:
         schema=None,
         func="async_raw_get_positions",
         supports_response=SupportsResponse.ONLY,
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        SERVICE_CLEAN_ZONE,
+        entity_domain=VACUUM_DOMAIN,
+        schema={
+            probatio.Required(ATTR_ZONES): probatio.Any(
+                probatio.All(list, probatio.Length(min=1, max=MAX_ZONES * 4)),
+                cv.string,
+            ),
+            probatio.Optional(ATTR_ROOMS): probatio.Any(list, cv.string, int),
+        },
+        func="async_clean_zone",
+    )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        SERVICE_START_SCENARIO,
+        entity_domain=VACUUM_DOMAIN,
+        schema={
+            probatio.Required(ATTR_SCENARIO_ID): probatio.All(
+                cv.string, probatio.Strip, probatio.Length(min=1)
+            ),
+        },
+        func="async_start_scenario",
     )
 
     async def async_raw_command(call: ServiceCall) -> ServiceResponse:

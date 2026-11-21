@@ -32,3 +32,32 @@ raw_command:
           step: 1
           unit_of_measurement: s
           mode: box
+
+clean_zone:
+  target:
+    entity:
+      domain: vacuum
+      integration: ecovacs_t90s
+  fields:
+    zones:
+      required: true
+      example: "[[1410, 2990, -360, 1210]]"
+      selector:
+        object:
+    rooms:
+      required: false
+      example: "[1]"
+      selector:
+        object:
+
+start_scenario:
+  target:
+    entity:
+      domain: vacuum
+      integration: ecovacs_t90s
+  fields:
+    scenario_id:
+      required: true
+      example: "5510"
+      selector:
+        text:

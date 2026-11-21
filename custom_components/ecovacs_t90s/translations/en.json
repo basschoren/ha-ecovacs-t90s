@@ -54,6 +54,9 @@
   },
   "entity": {
     "binary_sensor": {
+      "cloud_connected": {
+        "name": "Cloud connection"
+      },
       "water_mop_attached": {
         "name": "Mop attached"
       }
@@ -134,6 +137,9 @@
       "start_live_view": {
         "name": "Start live view"
       },
+      "start_scenario": {
+        "name": "Start scenario"
+      },
       "station_action_clean_base": {
         "name": "Clean base"
       },
@@ -145,6 +151,12 @@
       },
       "station_action_wash_mop": {
         "name": "Wash mop"
+      },
+      "station_stop_dry_mop": {
+        "name": "Stop drying the mops"
+      },
+      "station_stop_wash_mop": {
+        "name": "Stop washing the mops"
       },
       "stop_live_view": {
         "name": "Stop live view"
@@ -170,6 +182,9 @@
       }
     },
     "image": {
+      "last_clean_map": {
+        "name": "Last clean map"
+      },
       "map": {
         "name": "Map"
       }
@@ -205,11 +220,54 @@
           "smart": "Smart"
         }
       },
+      "cleaning_speed": {
+        "name": "Cleaning speed",
+        "state": {
+          "deep": "Deep",
+          "quick": "Quick",
+          "standard": "Standard"
+        }
+      },
+      "drying_duration": {
+        "name": "Mop drying duration",
+        "state": {
+          "four_hours": "4 hours",
+          "three_hours": "3 hours",
+          "two_hours": "2 hours"
+        }
+      },
+      "edge_mopping": {
+        "name": "Edge mopping",
+        "state": {
+          "extreme": "Extreme",
+          "off": "Off",
+          "standard": "Standard"
+        }
+      },
       "efficiency_mode": {
         "name": "Efficiency mode",
         "state": {
           "energy_efficient_mode": "Energy efficient",
           "standard_mode": "Standard"
+        }
+      },
+      "scenario": {
+        "name": "Scenario"
+      },
+      "true_detect_sensitivity": {
+        "name": "TrueDetect sensitivity",
+        "state": {
+          "high": "High",
+          "standard": "Standard"
+        }
+      },
+      "wash_temperature": {
+        "name": "Mop wash water temperature",
+        "state": {
+          "cold": "Cold",
+          "hot": "Hot",
+          "max": "Maximum",
+          "warm": "Warm"
         }
       },
       "water_amount": {
@@ -343,6 +401,14 @@
           }
         }
       },
+      "local_fallback": {
+        "name": "Local fallback",
+        "state": {
+          "available": "Available",
+          "not_found": "Not found",
+          "unavailable": "Unavailable"
+        }
+      },
       "network_ip": {
         "name": "IP address"
       },
@@ -351,6 +417,15 @@
       },
       "network_ssid": {
         "name": "Wi-Fi SSID"
+      },
+      "position_angle": {
+        "name": "Heading"
+      },
+      "position_x": {
+        "name": "Position X"
+      },
+      "position_y": {
+        "name": "Position Y"
       },
       "station_state": {
         "name": "Station state",
@@ -420,17 +495,29 @@
       "cross_map_border_warning": {
         "name": "Cross map border warning"
       },
+      "do_not_disturb": {
+        "name": "Do not disturb"
+      },
       "live_view": {
         "name": "Live view"
       },
+      "mop_only": {
+        "name": "Mop only"
+      },
       "move_up_warning": {
         "name": "Move up warning"
+      },
+      "ota_auto_update": {
+        "name": "Automatic firmware updates"
       },
       "safe_protect": {
         "name": "Safe protect"
       },
       "true_detect": {
         "name": "True detect"
+      },
+      "voice_assistant": {
+        "name": "Voice assistant"
       }
     },
     "vacuum": {
@@ -452,11 +539,26 @@
     }
   },
   "exceptions": {
+    "command_rejected": {
+      "message": "The robot rejected the command {command} (code {code})."
+    },
     "device_verification_required": {
       "message": "Device verification required"
     },
     "invalid_auth": {
       "message": "Invalid credentials"
+    },
+    "invalid_room_ids": {
+      "message": "Invalid {what}: {value}. Give the room ids as a list of numbers."
+    },
+    "invalid_zone": {
+      "message": "Invalid zone {value}. Give one or more rectangles as [x1, y1, x2, y2] in millimetres."
+    },
+    "local_fallback_area_not_mapped": {
+      "message": "Segment {segment} cannot be cleaned through the Matter twin {entity_id}: map the area of this room to segments of both vacuums (area mapping of the Clean area action)."
+    },
+    "local_fallback_unsupported": {
+      "message": "The Ecovacs cloud cannot reach the robot, and its Matter twin {entity_id} does not support {action}."
     },
     "raw_command_empty": {
       "message": "The command must not be empty."
@@ -466,6 +568,12 @@
     },
     "raw_command_unknown_target": {
       "message": "{target} is not a robot of a loaded Ecovacs DEEBOT T90S config entry."
+    },
+    "robot_unreachable": {
+      "message": "{name} cannot be reached through the Ecovacs cloud ({reason}) and no local Matter fallback is available."
+    },
+    "scenario_not_selected": {
+      "message": "No scenario is selected."
     },
     "setup_error": {
       "message": "Error during setup"
@@ -488,13 +596,15 @@
       "init": {
         "data": {
           "auto_stop_minutes": "Stop the live view automatically after",
-          "live_view_pin": "Live View PIN"
+          "live_view_pin": "Live View PIN",
+          "show_furniture": "Show furniture on the map"
         },
         "data_description": {
           "auto_stop_minutes": "In minutes. 0 disables the automatic stop.",
-          "live_view_pin": "The PIN that protects the robot camera in the Ecovacs app. Leave empty if you do not use the live view."
+          "live_view_pin": "The PIN that protects the robot camera in the Ecovacs app. Leave empty if you do not use the live view.",
+          "show_furniture": "Draws the furniture and carpets the robot knows on the map image."
         },
-        "title": "Live view"
+        "title": "Options"
       }
     }
   },
@@ -507,6 +617,20 @@
     }
   },
   "services": {
+    "clean_zone": {
+      "description": "Cleans one or more rectangles, and optionally rooms, in one job. Coordinates are map millimetres, the same as the robot position.",
+      "fields": {
+        "rooms": {
+          "description": "Room ids (see the rooms attribute of the vacuum) cleaned after the zones in the same job.",
+          "name": "Rooms"
+        },
+        "zones": {
+          "description": "List of rectangles [x1, y1, x2, y2] in millimetres, for example [[1410, 2990, -360, 1210]].",
+          "name": "Zones"
+        }
+      },
+      "name": "Clean zone"
+    },
     "raw_command": {
       "description": "Sends a JSON command to the robot through deebot-client and returns the raw answer. Meant for debugging and exploring undocumented commands; a wrong command can change robot settings.",
       "fields": {
@@ -528,6 +652,16 @@
     "raw_get_positions": {
       "description": "Retrieves a raw response containing the positions of the chargers and the device itself.",
       "name": "Get raw positions"
+    },
+    "start_scenario": {
+      "description": "Starts a cleaning scenario saved in the Ecovacs app.",
+      "fields": {
+        "scenario_id": {
+          "description": "Id of the scenario (see the scenario select or the diagnostics).",
+          "name": "Scenario ID"
+        }
+      },
+      "name": "Start scenario"
     }
   }
 }

@@ -54,6 +54,9 @@
   },
   "entity": {
     "binary_sensor": {
+      "cloud_connected": {
+        "name": "Cloudverbinding"
+      },
       "water_mop_attached": {
         "name": "Mop bevestigd"
       }
@@ -134,6 +137,9 @@
       "start_live_view": {
         "name": "Live view starten"
       },
+      "start_scenario": {
+        "name": "Scenario starten"
+      },
       "station_action_clean_base": {
         "name": "Basis reinigen"
       },
@@ -145,6 +151,12 @@
       },
       "station_action_wash_mop": {
         "name": "Mop wassen"
+      },
+      "station_stop_dry_mop": {
+        "name": "Dweilen drogen stoppen"
+      },
+      "station_stop_wash_mop": {
+        "name": "Dweilen wassen stoppen"
       },
       "stop_live_view": {
         "name": "Live view stoppen"
@@ -170,6 +182,9 @@
       }
     },
     "image": {
+      "last_clean_map": {
+        "name": "Kaart laatste schoonmaakbeurt"
+      },
       "map": {
         "name": "Kaart"
       }
@@ -205,11 +220,54 @@
           "smart": "Slim"
         }
       },
+      "cleaning_speed": {
+        "name": "Schoonmaaksnelheid",
+        "state": {
+          "deep": "Grondig",
+          "quick": "Snel",
+          "standard": "Standaard"
+        }
+      },
+      "drying_duration": {
+        "name": "Droogduur dweilen",
+        "state": {
+          "four_hours": "4 uur",
+          "three_hours": "3 uur",
+          "two_hours": "2 uur"
+        }
+      },
+      "edge_mopping": {
+        "name": "Randdweilen",
+        "state": {
+          "extreme": "Extreem",
+          "off": "Uit",
+          "standard": "Standaard"
+        }
+      },
       "efficiency_mode": {
         "name": "Efficiëntiemodus",
         "state": {
           "energy_efficient_mode": "Energiezuinig",
           "standard_mode": "Standaard"
+        }
+      },
+      "scenario": {
+        "name": "Scenario"
+      },
+      "true_detect_sensitivity": {
+        "name": "TrueDetect-gevoeligheid",
+        "state": {
+          "high": "Hoog",
+          "standard": "Standaard"
+        }
+      },
+      "wash_temperature": {
+        "name": "Watertemperatuur dweilen wassen",
+        "state": {
+          "cold": "Koud",
+          "hot": "Heet",
+          "max": "Maximaal",
+          "warm": "Warm"
         }
       },
       "water_amount": {
@@ -343,6 +401,14 @@
           }
         }
       },
+      "local_fallback": {
+        "name": "Lokale fallback",
+        "state": {
+          "available": "Beschikbaar",
+          "not_found": "Niet gevonden",
+          "unavailable": "Niet beschikbaar"
+        }
+      },
       "network_ip": {
         "name": "IP-adres"
       },
@@ -351,6 +417,15 @@
       },
       "network_ssid": {
         "name": "Wifi-SSID"
+      },
+      "position_angle": {
+        "name": "Richting"
+      },
+      "position_x": {
+        "name": "Positie X"
+      },
+      "position_y": {
+        "name": "Positie Y"
       },
       "station_state": {
         "name": "Stationstatus",
@@ -420,17 +495,29 @@
       "cross_map_border_warning": {
         "name": "Waarschuwing bij overschrijden kaartgrens"
       },
+      "do_not_disturb": {
+        "name": "Niet storen"
+      },
       "live_view": {
         "name": "Live view"
       },
+      "mop_only": {
+        "name": "Alleen dweilen"
+      },
       "move_up_warning": {
         "name": "Waarschuwing bij optillen"
+      },
+      "ota_auto_update": {
+        "name": "Automatische firmware-updates"
       },
       "safe_protect": {
         "name": "Veilige bescherming"
       },
       "true_detect": {
         "name": "True Detect"
+      },
+      "voice_assistant": {
+        "name": "Spraakassistent"
       }
     },
     "vacuum": {
@@ -452,11 +539,26 @@
     }
   },
   "exceptions": {
+    "command_rejected": {
+      "message": "De robot heeft het commando {command} geweigerd (code {code})."
+    },
     "device_verification_required": {
       "message": "Apparaatverificatie vereist"
     },
     "invalid_auth": {
       "message": "Ongeldige inloggegevens"
+    },
+    "invalid_room_ids": {
+      "message": "Ongeldige {what}: {value}. Geef de kamer-id's als een lijst met getallen."
+    },
+    "invalid_zone": {
+      "message": "Ongeldige zone {value}. Geef een of meer rechthoeken als [x1, y1, x2, y2] in millimeter."
+    },
+    "local_fallback_area_not_mapped": {
+      "message": "Segment {segment} kan niet via de Matter-tweeling {entity_id} worden schoongemaakt: koppel de ruimte van deze kamer aan segmenten van beide stofzuigers (ruimtekoppeling van de actie Ruimte schoonmaken)."
+    },
+    "local_fallback_unsupported": {
+      "message": "De Ecovacs-cloud kan de robot niet bereiken en zijn Matter-tweeling {entity_id} ondersteunt {action} niet."
     },
     "raw_command_empty": {
       "message": "Het commando mag niet leeg zijn."
@@ -466,6 +568,12 @@
     },
     "raw_command_unknown_target": {
       "message": "{target} is geen robot van een geladen Ecovacs DEEBOT T90S-configuratie."
+    },
+    "robot_unreachable": {
+      "message": "{name} is niet bereikbaar via de Ecovacs-cloud ({reason}) en er is geen lokale Matter-fallback beschikbaar."
+    },
+    "scenario_not_selected": {
+      "message": "Er is geen scenario gekozen."
     },
     "setup_error": {
       "message": "Fout tijdens het instellen"
@@ -488,13 +596,15 @@
       "init": {
         "data": {
           "auto_stop_minutes": "Live view automatisch stoppen na",
-          "live_view_pin": "Live View-pincode"
+          "live_view_pin": "Live View-pincode",
+          "show_furniture": "Meubels op de kaart tonen"
         },
         "data_description": {
           "auto_stop_minutes": "In minuten. 0 schakelt automatisch stoppen uit.",
-          "live_view_pin": "De pincode die de robotcamera in de Ecovacs-app beveiligt. Laat leeg als je live view niet gebruikt."
+          "live_view_pin": "De pincode die de robotcamera in de Ecovacs-app beveiligt. Laat leeg als je live view niet gebruikt.",
+          "show_furniture": "Tekent de meubels en tapijten die de robot kent op de kaartafbeelding."
         },
-        "title": "Live view"
+        "title": "Opties"
       }
     }
   },
@@ -507,6 +617,20 @@
     }
   },
   "services": {
+    "clean_zone": {
+      "description": "Maakt een of meer rechthoeken, en eventueel kamers, in één taak schoon. Coördinaten zijn kaartmillimeters, net als de positie van de robot.",
+      "fields": {
+        "rooms": {
+          "description": "Kamer-id's (zie het attribuut rooms van de stofzuiger) die in dezelfde taak na de zones worden schoongemaakt.",
+          "name": "Kamers"
+        },
+        "zones": {
+          "description": "Lijst met rechthoeken [x1, y1, x2, y2] in millimeter, bijvoorbeeld [[1410, 2990, -360, 1210]].",
+          "name": "Zones"
+        }
+      },
+      "name": "Zone schoonmaken"
+    },
     "raw_command": {
       "description": "Stuurt een JSON-commando via deebot-client naar de robot en geeft het onbewerkte antwoord terug. Bedoeld voor debuggen en het verkennen van ongedocumenteerde commando's; een verkeerd commando kan robotinstellingen wijzigen.",
       "fields": {
@@ -528,6 +652,16 @@
     "raw_get_positions": {
       "description": "Haalt een onbewerkt antwoord op met de posities van de laadstations en het apparaat zelf.",
       "name": "Onbewerkte posities ophalen"
+    },
+    "start_scenario": {
+      "description": "Start een schoonmaakscenario dat in de Ecovacs-app is opgeslagen.",
+      "fields": {
+        "scenario_id": {
+          "description": "Id van het scenario (zie de scenariokeuze of de diagnose).",
+          "name": "Scenario-ID"
+        }
+      },
+      "name": "Scenario starten"
     }
   }
 }

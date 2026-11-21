@@ -2,11 +2,12 @@
 
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
 see NOTICE. Changes: added the live view start/stop buttons (from ECOVACS Live
-View, MIT).
+View, MIT), buttons that stop washing and drying the mops, and a button that
+starts the scenario selected in the scenario select.
 """
 
 from dataclasses import dataclass
-from typing import override
+from typing import Any, override
 
 from deebot_client.capabilities import (
     CapabilityExecute,
@@ -14,21 +15,30 @@ from deebot_client.capabilities import (
     CapabilityLifeSpan,
 )
 from deebot_client.commands import StationAction
-from deebot_client.events import LifeSpan
+from deebot_client.device import Device
+from deebot_client.events import LifeSpan, StateEvent
+from deebot_client.models import State
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import EcovacsConfigEntry
-from .const import SUPPORTED_LIFESPANS, SUPPORTED_STATION_ACTIONS
+from .commands import settings
+from .commands.clean import scenario_command, station_stop_command
+from .const import DOMAIN, SUPPORTED_LIFESPANS, SUPPORTED_STATION_ACTIONS
 from .entity import (
     EcovacsCapabilityEntityDescription,
     EcovacsDescriptionEntity,
     EcovacsEntity,
+    EcovacsExtrasEntity,
     EcovacsLiveViewEntity,
+    async_add_feature_entities,
+    raise_for_outcome,
 )
+from .extras import DeviceExtras
 from .util import get_supported_entities
 
 
@@ -54,6 +64,13 @@ class EcovacsStationActionButtonEntityDescription(ButtonEntityDescription):
     action: StationAction
 
 
+@dataclass(kw_only=True, frozen=True)
+class EcovacsStationStopButtonEntityDescription(ButtonEntityDescription):
+    """Button that stops a running station action."""
+
+    action: StationAction
+
+
 ENTITY_DESCRIPTIONS: tuple[EcovacsButtonEntityDescription, ...] = (
     EcovacsButtonEntityDescription(
         capability_fn=lambda caps: caps.map.relocation if caps.map else None,
@@ -70,6 +87,23 @@ STATION_ENTITY_DESCRIPTIONS = tuple(
         translation_key=f"station_action_{action.name.lower()}",
     )
     for action in SUPPORTED_STATION_ACTIONS
+)
+
+
+# stationAction {"act": 4, "type": <type>} (app capture, deebot-client #2027)
+STATION_STOP_ENTITY_DESCRIPTIONS: tuple[
+    EcovacsStationStopButtonEntityDescription, ...
+] = (
+    EcovacsStationStopButtonEntityDescription(
+        action=StationAction.WASH_MOP,
+        key="station_stop_wash_mop",
+        translation_key="station_stop_wash_mop",
+    ),
+    EcovacsStationStopButtonEntityDescription(
+        action=StationAction.DRY_MOP,
+        key="station_stop_dry_mop",
+        translation_key="station_stop_dry_mop",
+    ),
 )
 
 
@@ -112,7 +146,28 @@ async def async_setup_entry(
         for description in STATION_ENTITY_DESCRIPTIONS
         if description.action in device.capabilities.station.action.types
     )
+    # Only for robots whose station can wash/dry the mops
+    entities.extend(
+        EcovacsStationStopButtonEntity(
+            device, controller.get_extras(device), description
+        )
+        for device in controller.devices
+        if device.capabilities.station
+        for description in STATION_STOP_ENTITY_DESCRIPTIONS
+        if description.action in device.capabilities.station.action.types
+    )
     async_add_entities(entities)
+
+    async_add_feature_entities(
+        hass,
+        config_entry,
+        async_add_entities,
+        {
+            settings.QUICK_COMMAND.key: lambda device, extras: [
+                EcovacsStartScenarioButtonEntity(device, extras)
+            ]
+        },
+    )
 
     if (live_view := controller.live_view) is not None:
         live_view_buttons: list[ButtonEntity] = []
@@ -188,3 +243,49 @@ class EcovacsStopLiveViewButton(EcovacsLiveViewEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Stop the live view."""
         await self._live_view.async_stop(self.did)
+
+
+class EcovacsStationStopButtonEntity(
+    EcovacsDescriptionEntity[DeviceExtras],
+    ButtonEntity,
+):
+    """Stop washing or drying the mops."""
+
+    entity_description: EcovacsStationStopButtonEntityDescription
+
+    @override
+    async def async_press(self) -> None:
+        """Press the button."""
+        command = await self._capability.async_execute(
+            station_stop_command(self.entity_description.action.value)
+        )
+        info = self._device.device_info
+        raise_for_outcome(command, info.get("nick") or info["name"])
+
+
+class EcovacsStartScenarioButtonEntity(EcovacsExtrasEntity, ButtonEntity):
+    """Start the scenario selected in the scenario select."""
+
+    entity_description = ButtonEntityDescription(
+        key="start_scenario", translation_key="start_scenario"
+    )
+
+    def __init__(self, device: Device, extras: DeviceExtras) -> None:
+        """Initialize entity."""
+        super().__init__(device, extras, self.entity_description)
+        self._spec = settings.QUICK_COMMAND
+        self._value_key = settings.QUICK_COMMAND.key
+
+    def _update_from_value(self, value: Any) -> None:
+        """Nothing to show."""
+
+    @override
+    async def async_press(self) -> None:
+        """Start the selected scenario."""
+        if not (scenario_id := self._capability.values.get("selected_scenario")):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="scenario_not_selected"
+            )
+        command = await self._capability.async_execute(scenario_command(scenario_id))
+        raise_for_outcome(command, self._robot_name)
+        self._device.events.notify(StateEvent(State.CLEANING))

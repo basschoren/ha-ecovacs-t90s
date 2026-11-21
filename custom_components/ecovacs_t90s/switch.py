@@ -2,30 +2,39 @@
 
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
 see NOTICE. Changes: added the live view switch (a local addition to ECOVACS
-Live View, MIT).
+Live View, MIT); switches for deebot-client capabilities the core integration
+has no entity for (voice assistant, mop-only mode, automatic firmware
+updates) and for do not disturb, created only when the robot supports them.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, override
 
-from deebot_client.capabilities import CapabilitySet
+from deebot_client.capabilities import CapabilitySet, CapabilitySetEnable
 from deebot_client.command import CommandWithMessageHandling
-from deebot_client.events import EnableEvent
+from deebot_client.device import Device
+from deebot_client.events import EnableEvent, OtaEvent
 from deebot_client.events.auto_empty import AutoEmptyEvent
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import EcovacsConfigEntry
+from .commands import settings
 from .entity import (
     EcovacsCapabilityEntityDescription,
     EcovacsDescriptionEntity,
     EcovacsEntity,
+    EcovacsExtrasEntity,
     EcovacsLiveViewEntity,
+    async_add_feature_entities,
+    raise_for_outcome,
 )
+from .extras import DeviceExtras
 from .util import get_supported_entities
 
 
@@ -130,6 +139,27 @@ ENTITY_DESCRIPTIONS: tuple[EcovacsSwitchEntityDescription, ...] = (
 )
 
 
+# deebot-client capabilities without an entity in the core integration; the
+# key is the probe key (commands/settings.py), so they are only created when
+# the robot answers the get command
+PROBED_ENTITY_DESCRIPTIONS: tuple[EcovacsSwitchEntityDescription, ...] = (
+    EcovacsSwitchEntityDescription(
+        capability_fn=lambda c: c.settings.voice_assistant,
+        key=settings.VOICE_ASSISTANT.key,
+        translation_key="voice_assistant",
+        entity_registry_enabled_default=False,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    EcovacsSwitchEntityDescription(
+        capability_fn=lambda c: c.settings.sweep_mode,
+        key=settings.SWEEP_MODE.key,
+        translation_key="mop_only",
+        entity_registry_enabled_default=False,
+        entity_category=EntityCategory.CONFIG,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: EcovacsConfigEntry,
@@ -148,6 +178,35 @@ async def async_setup_entry(
             EcovacsLiveViewSwitch(device, live_view, "live_view")
             for device in controller.devices
         )
+
+    def capability_switch(
+        description: EcovacsSwitchEntityDescription,
+    ) -> Callable[[Device, DeviceExtras], list[Entity]]:
+        def create(device: Device, extras: DeviceExtras) -> list[Entity]:
+            capability = description.capability_fn(device.capabilities)
+            return (
+                [EcovacsSwitchEntity(device, capability, description)]
+                if capability
+                else []
+            )
+
+        return create
+
+    def ota_switch(device: Device, extras: DeviceExtras) -> list[Entity]:
+        capability = device.capabilities.settings.ota
+        if not isinstance(capability, CapabilitySetEnable):
+            return []
+        return [EcovacsOtaSwitchEntity(device, capability)]
+
+    factories: dict[str, Callable[[Device, DeviceExtras], list[Entity]]] = {
+        description.key: capability_switch(description)
+        for description in PROBED_ENTITY_DESCRIPTIONS
+    }
+    factories[settings.OTA.key] = ota_switch
+    factories[settings.BLOCK.key] = lambda device, extras: [
+        EcovacsDoNotDisturbSwitchEntity(device, extras)
+    ]
+    async_add_feature_entities(hass, config_entry, async_add_entities, factories)
 
 
 class EcovacsSwitchEntity(
@@ -219,3 +278,91 @@ class EcovacsLiveViewSwitch(EcovacsLiveViewEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop the live view."""
         await self._live_view.async_stop(self.did)
+
+
+class EcovacsOtaSwitchEntity(
+    EcovacsEntity[CapabilitySetEnable[OtaEvent]],
+    SwitchEntity,
+):
+    """Automatic firmware updates."""
+
+    entity_description = SwitchEntityDescription(
+        key="ota_auto_update",
+        translation_key="ota_auto_update",
+        entity_registry_enabled_default=False,
+        entity_category=EntityCategory.CONFIG,
+    )
+    _attr_is_on: bool | None = None
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Set up the event listeners now that hass is ready."""
+        await super().async_added_to_hass()
+
+        async def on_event(event: OtaEvent) -> None:
+            if event.auto_enabled is not None:
+                self._attr_is_on = bool(event.auto_enabled)
+            self._attr_extra_state_attributes = {
+                "firmware_version": event.version,
+                "update_status": event.status,
+                "update_progress": event.progress,
+            }
+            self.async_write_ha_state()
+
+        self._subscribe(self._capability.event, on_event)
+
+    @override
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn automatic updates on."""
+        await self._device.execute_command(self._capability.set(True))
+
+    @override
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn automatic updates off."""
+        await self._device.execute_command(self._capability.set(False))
+
+
+class EcovacsDoNotDisturbSwitchEntity(EcovacsExtrasEntity, SwitchEntity):
+    """Do not disturb (setBlock); the times are kept as set in the app."""
+
+    entity_description = SwitchEntityDescription(
+        key="do_not_disturb",
+        translation_key="do_not_disturb",
+        entity_category=EntityCategory.CONFIG,
+    )
+    _attr_is_on: bool | None = None
+
+    def __init__(self, device: Device, extras: DeviceExtras) -> None:
+        """Initialize entity."""
+        super().__init__(device, extras, self.entity_description)
+        self._spec = settings.BLOCK
+        self._value_key = settings.BLOCK.key
+
+    def _update_from_value(self, value: Any) -> None:
+        if not isinstance(value, Mapping):
+            self._attr_is_on = None
+            return
+        enable = value.get("enable")
+        self._attr_is_on = bool(enable) if enable is not None else None
+        self._attr_extra_state_attributes = {
+            "start": value.get("start"),
+            "end": value.get("end"),
+        }
+
+    async def _async_set(self, enable: bool) -> None:
+        value = self._capability.values.get(self._value_key)
+        current = value if isinstance(value, Mapping) else {}
+        command = await self._capability.async_set(
+            settings.BLOCK, settings.block_args(enable, current)
+        )
+        raise_for_outcome(command, self._robot_name)
+
+    @override
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn do not disturb on."""
+        await self._async_set(True)
+
+    @override
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn do not disturb off."""
+        await self._async_set(False)

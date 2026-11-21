@@ -2,7 +2,9 @@
 
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
 see NOTICE. Changes: also redacts the client device ID and the Live View PIN,
-reports unsupported robots, the device class mappings and the live view state.
+reports unsupported robots, the device class mappings, the live view state
+and the state of the extra features (probes, settings, furniture, cloud
+connection, local fallback).
 """
 
 from typing import Any
@@ -58,5 +60,10 @@ async def async_get_config_entry_diagnostics(
     diag["live_view"] = (
         controller.live_view.diagnostics() if controller.live_view else None
     )
+    # Per robot, in the order of "devices"; no serial numbers or robot ids
+    diag["extras"] = [
+        extras.diagnostics() if (extras := controller.extras.get(did)) else None
+        for did in (device.device_info["did"] for device in controller.devices)
+    ]
 
     return diag

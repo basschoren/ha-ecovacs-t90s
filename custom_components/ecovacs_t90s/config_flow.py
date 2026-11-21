@@ -3,7 +3,7 @@
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
 see NOTICE. Changes: optional Live View PIN in the login step and an options
 flow for the live view settings (replacing the separate login of ECOVACS Live
-View, MIT).
+View, MIT) and the furniture layer of the map.
 """
 
 from collections.abc import Mapping
@@ -52,9 +52,11 @@ from .const import (
     CONF_LIVE_VIEW_PIN,
     CONF_OVERRIDE_MQTT_URL,
     CONF_OVERRIDE_REST_URL,
+    CONF_SHOW_FURNITURE,
     CONF_VERIFICATION_CODE,
     CONF_VERIFY_MQTT_CERTIFICATE,
     DEFAULT_AUTO_STOP_MINUTES,
+    DEFAULT_SHOW_FURNITURE,
     DOMAIN,
     MAX_AUTO_STOP_MINUTES,
     InstanceMode,
@@ -474,12 +476,12 @@ def _live_view_pin_selector() -> selector.TextSelector:
 
 
 class EcovacsOptionsFlow(OptionsFlow):
-    """Live view options (from ECOVACS Live View)."""
+    """Live view options (from ECOVACS Live View) and map options."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the live view options."""
+        """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(
                 data={
@@ -487,6 +489,9 @@ class EcovacsOptionsFlow(OptionsFlow):
                         user_input.get(CONF_LIVE_VIEW_PIN) or ""
                     ).strip(),
                     CONF_AUTO_STOP_MINUTES: int(user_input[CONF_AUTO_STOP_MINUTES]),
+                    CONF_SHOW_FURNITURE: bool(
+                        user_input.get(CONF_SHOW_FURNITURE, DEFAULT_SHOW_FURNITURE)
+                    ),
                 }
             )
 
@@ -506,6 +511,9 @@ class EcovacsOptionsFlow(OptionsFlow):
                         unit_of_measurement="min",
                     )
                 ),
+                probatio.Required(
+                    CONF_SHOW_FURNITURE, default=DEFAULT_SHOW_FURNITURE
+                ): selector.BooleanSelector(),
             }
         )
         return self.async_show_form(

@@ -1,10 +1,15 @@
 """Support for Ecovacs Ecovacs Vacuums.
 
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
-see NOTICE. Changes: removed the legacy (XMPP) vacuum.
+see NOTICE. Changes: removed the legacy (XMPP) vacuum; start, pause, resume,
+stop and room cleaning use ``clean_V2`` first for mapped device classes with a
+fallback to ``clean`` on ``20003`` (``commands/clean.py``); commands report
+failures; commands are routed to the robot's Matter twin while the Ecovacs
+cloud cannot reach the robot (``local_fallback.py``); rooms without a name get
+a generated one; new services ``clean_zone`` and ``start_scenario``.
 """
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 import logging
 from typing import TYPE_CHECKING, Any, override
 
@@ -18,7 +23,7 @@ from deebot_client.events import (
     StateEvent,
 )
 from deebot_client.events.map import Map
-from deebot_client.models import CleanAction, CleanMode, State
+from deebot_client.models import CleanAction, Room, State
 
 from homeassistant.components.vacuum import (
     Segment,
@@ -27,18 +32,39 @@ from homeassistant.components.vacuum import (
     VacuumActivity,
     VacuumEntityFeature,
 )
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.util import slugify
 
 from . import EcovacsConfigEntry
+from .commands.base import CommandOutcome, T90Command
+from .commands.clean import (
+    CHARGE_ALREADY_CHARGING,
+    Payloads,
+    charge_command,
+    clean_action_payloads,
+    play_sound_command,
+    rooms_payloads,
+    scenario_command,
+    zone_payloads,
+)
 from .const import DOMAIN
 from .entity import EcovacsEntity
+from .extras import DeviceExtras
+from .local_fallback import matter_area_ids
 from .util import get_name_key
 
 _LOGGER = logging.getLogger(__name__)
 _SEGMENTS_SEPARATOR = "_"
+
+# Answer time allowed to the cloud before a command goes to the Matter twin
+CLOUD_TIMEOUT_WITH_FALLBACK = 15.0
+# Ask for the state again after a command, in case no push arrives
+STATE_REFRESH_DELAY = 10.0
+
+_ROOM_WORD = {"nl": "Kamer"}
 
 
 async def async_setup_entry(
@@ -50,7 +76,7 @@ async def async_setup_entry(
 
     controller = config_entry.runtime_data
     vacuums = [
-        EcovacsVacuum(device)
+        EcovacsVacuum(device, controller.get_extras(device))
         for device in controller.devices
         if device.capabilities.device_type is DeviceType.VACUUM
     ]
@@ -68,6 +94,52 @@ _STATE_TO_VACUUM_STATE = {
 }
 
 _ATTR_ROOMS = "rooms"
+_ATTR_CONTROL_PATH = "control_path"
+_ATTR_LOCAL_ENTITY = "local_fallback_entity_id"
+
+type LocalCall = tuple[str, dict[str, Any]]
+
+
+def room_name(room: Room, language: str) -> str:
+    """Return the room name, or "Room <id>" for rooms without a name."""
+    if name := room.name.strip():
+        return name
+    word = _ROOM_WORD.get(language.split("-", maxsplit=1)[0].lower(), "Room")
+    return f"{word} {room.id}"
+
+
+def _int_list(value: Any, what: str) -> list[int]:
+    """Return room ids from a list or a comma separated string."""
+    items = value.split(",") if isinstance(value, str) else value
+    try:
+        return [int(item) for item in items]
+    except TypeError, ValueError:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_room_ids",
+            translation_placeholders={"value": str(value), "what": what},
+        ) from None
+
+
+def _rectangles(value: Any) -> list[list[float]]:
+    """Return rectangles from [[x1, y1, x2, y2], ...], [x1, ...] or "x1,..."."""
+    if isinstance(value, str):
+        value = value.split(",")
+    try:
+        if value and all(isinstance(item, (list, tuple)) for item in value):
+            rectangles = [[float(v) for v in item] for item in value]
+        else:
+            flat = [float(v) for v in value]
+            rectangles = [flat[i : i + 4] for i in range(0, len(flat), 4)]
+    except TypeError, ValueError:
+        rectangles = []
+    if not rectangles or any(len(rectangle) != 4 for rectangle in rectangles):
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_zone",
+            translation_placeholders={"value": str(value)},
+        )
+    return rectangles
 
 
 class EcovacsVacuum(
@@ -92,13 +164,15 @@ class EcovacsVacuum(
         key="vacuum", translation_key="vacuum", name=None
     )
 
-    def __init__(self, device: Device) -> None:
+    def __init__(self, device: Device, extras: DeviceExtras) -> None:
         """Initialize the vacuum."""
         super().__init__(device, device.capabilities)
+        self._extras = extras
 
         self._room_event: RoomsEvent | None = None
         self._maps: dict[str, Map] = {}
         self._clean_count = 1
+        self._state_refresh: CALLBACK_TYPE | None = None
 
         if fan_speed := self._capability.fan_speed:
             self._attr_supported_features |= VacuumEntityFeature.FAN_SPEED
@@ -150,6 +224,39 @@ class EcovacsVacuum(
 
             self._subscribe(map_caps.cached_info.event, on_map_info)
 
+        self.async_on_remove(self._extras.cloud.async_subscribe(self._on_path_change))
+        self.async_on_remove(
+            self._extras.fallback.async_subscribe(self._on_path_change)
+        )
+
+    @callback
+    def _on_path_change(self) -> None:
+        if self.hass is not None and self.entity_id:
+            self.async_write_ha_state()
+
+    # ------------------------------------------------------------ state
+
+    def _use_local(self) -> bool:
+        """Return True while the twin stands in for the cloud."""
+        return not self._extras.cloud.connected and self._extras.fallback.ready
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Available through the cloud or the Matter twin."""
+        return self._attr_available or self._extras.fallback.ready
+
+    @property
+    @override
+    def activity(self) -> VacuumActivity | None:
+        """Return the activity; the twin's while the cloud is not reachable."""
+        if self._use_local():
+            return self._extras.fallback.activity
+        return self._attr_activity
+
+    def _language(self) -> str:
+        return self.hass.config.language if self.hass else "en"
+
     @property
     @override
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -158,25 +265,182 @@ class EcovacsVacuum(
         Implemented by platform classes. Convention for attribute names
         is lowercase snake_case.
         """
-        rooms: dict[str, Any] = {}
+        attributes: dict[str, Any] = {
+            _ATTR_CONTROL_PATH: "local" if self._use_local() else "cloud",
+        }
+        if (local_entity := self._extras.fallback.entity_id) is not None:
+            attributes[_ATTR_LOCAL_ENTITY] = local_entity
         if self._room_event is None:
-            return rooms
+            return attributes
 
+        rooms: dict[str, Any] = {}
+        language = self._language()
         for room in self._room_event.rooms:
             # convert room name to snake_case to meet the convention
-            room_name = slugify(room.name)
-            room_values = rooms.get(room_name)
+            name = slugify(room_name(room, language))
+            room_values = rooms.get(name)
             if room_values is None:
-                rooms[room_name] = room.id
+                rooms[name] = room.id
             elif isinstance(room_values, list):
                 room_values.append(room.id)
             else:
                 # Convert from int to list
-                rooms[room_name] = [room_values, room.id]
+                rooms[name] = [room_values, room.id]
 
-        return {
-            _ATTR_ROOMS: rooms,
-        }
+        attributes[_ATTR_ROOMS] = rooms
+        return attributes
+
+    # ---------------------------------------------------------- routing
+
+    async def _async_run(
+        self,
+        action: str,
+        cloud: Callable[[float | None], Awaitable[T90Command | None]],
+        local: Callable[[], LocalCall] | None,
+        on_success: Callable[[T90Command], None] | None = None,
+    ) -> None:
+        """Run a command through the cloud, or through the twin if needed."""
+        extras = self._extras
+        fallback = extras.fallback
+        if local is not None and self._use_local():
+            await self._async_local(action, local)
+            return
+
+        timeout = (
+            CLOUD_TIMEOUT_WITH_FALLBACK
+            if local is not None and fallback.ready
+            else None
+        )
+        command = await cloud(timeout)
+        if command is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="vacuum_send_command_not_supported",
+                translation_placeholders={"command": action, "name": self._name()},
+            )
+        if command.outcome is CommandOutcome.OK:
+            if on_success is not None:
+                on_success(command)
+            return
+        if command.outcome.is_connection_problem:
+            if local is not None and fallback.ready:
+                _LOGGER.info(
+                    "Ecovacs cloud cannot reach %s (%s); sending %s to %s",
+                    self.entity_id,
+                    command.outcome,
+                    action,
+                    fallback.entity_id,
+                )
+                await self._async_local(action, local)
+                return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="robot_unreachable",
+                translation_placeholders={
+                    "name": self._name(),
+                    "reason": str(command.outcome),
+                },
+            )
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="command_rejected",
+            translation_placeholders={
+                "command": command.NAME,
+                "code": str(command.code),
+            },
+        )
+
+    async def _async_local(self, action: str, local: Callable[[], LocalCall]) -> None:
+        fallback = self._extras.fallback
+        service, data = local()
+        if not fallback.supports(service):
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="local_fallback_unsupported",
+                translation_placeholders={
+                    "action": action,
+                    "entity_id": str(fallback.entity_id),
+                },
+            )
+        await fallback.async_call(service, data)
+
+    def _name(self) -> str:
+        info = self._device.device_info
+        return info.get("nick") or info["name"]
+
+    def _optimistic(self, state: State) -> Callable[[T90Command], None]:
+        """Show the expected state at once and ask for the real one later."""
+
+        def apply(_command: T90Command) -> None:
+            self._device.events.notify(StateEvent(state))
+            self._schedule_state_refresh()
+
+        return apply
+
+    def _schedule_state_refresh(self) -> None:
+        self._cancel_state_refresh()
+
+        @callback
+        def refresh(_now: Any) -> None:
+            self._state_refresh = None
+            self._device.events.request_refresh(StateEvent)
+
+        self._state_refresh = async_call_later(self.hass, STATE_REFRESH_DELAY, refresh)
+
+    def _cancel_state_refresh(self) -> None:
+        if self._state_refresh is not None:
+            self._state_refresh()
+            self._state_refresh = None
+
+    @override
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel the pending state refresh."""
+        self._cancel_state_refresh()
+        await super().async_will_remove_from_hass()
+
+    def _clean(
+        self, payloads: Payloads
+    ) -> Callable[[float | None], Awaitable[T90Command | None]]:
+        async def run(limit: float | None) -> T90Command | None:
+            return await self._extras.async_run_clean(payloads, limit=limit)
+
+        return run
+
+    def _single(
+        self, factory: Callable[[], T90Command]
+    ) -> Callable[[float | None], Awaitable[T90Command | None]]:
+        async def run(limit: float | None) -> T90Command | None:
+            return await self._extras.async_execute(factory(), limit=limit)
+
+        return run
+
+    @staticmethod
+    def _local(
+        service: str, data: dict[str, Any] | None = None
+    ) -> Callable[[], LocalCall]:
+        return lambda: (service, data or {})
+
+    async def _clean_command(self, action: CleanAction) -> None:
+        local_service = {
+            CleanAction.START: "start",
+            CleanAction.RESUME: "start",
+            CleanAction.PAUSE: "pause",
+            CleanAction.STOP: "stop",
+        }[action]
+        state = {
+            CleanAction.START: State.CLEANING,
+            CleanAction.RESUME: State.CLEANING,
+            CleanAction.PAUSE: State.PAUSED,
+            CleanAction.STOP: State.IDLE,
+        }[action]
+        await self._async_run(
+            local_service,
+            self._clean(clean_action_payloads(action)),
+            self._local(local_service),
+            self._optimistic(state),
+        )
+
+    # --------------------------------------------------------- commands
 
     @override
     async def async_set_fan_speed(self, fan_speed: str, **kwargs: Any) -> None:
@@ -188,7 +452,22 @@ class EcovacsVacuum(
     @override
     async def async_return_to_base(self, **kwargs: Any) -> None:
         """Set the vacuum cleaner to return to the dock."""
-        await self._device.execute_command(self._capability.charge.execute())
+
+        def on_success(command: T90Command) -> None:
+            state = (
+                State.DOCKED
+                if command.code == CHARGE_ALREADY_CHARGING
+                else State.RETURNING
+            )
+            self._device.events.notify(StateEvent(state))
+            self._schedule_state_refresh()
+
+        await self._async_run(
+            "return_to_base",
+            self._single(charge_command),
+            self._local("return_to_base"),
+            on_success,
+        )
 
     @override
     async def async_stop(self, **kwargs: Any) -> None:
@@ -202,18 +481,49 @@ class EcovacsVacuum(
 
     @override
     async def async_start(self) -> None:
-        """Start the vacuum cleaner."""
-        await self._clean_command(CleanAction.START)
-
-    async def _clean_command(self, action: CleanAction) -> None:
-        await self._device.execute_command(
-            self._capability.clean.action.command(action)
-        )
+        """Start the vacuum cleaner, or resume a paused job."""
+        state = self._device.events.get_last_event(StateEvent)
+        paused = state is not None and state.state == State.PAUSED
+        await self._clean_command(CleanAction.RESUME if paused else CleanAction.START)
 
     @override
     async def async_locate(self, **kwargs: Any) -> None:
         """Locate the vacuum cleaner."""
-        await self._device.execute_command(self._capability.play_sound.execute())
+        await self._async_run(
+            "locate", self._single(play_sound_command), self._local("locate")
+        )
+
+    async def async_clean_rooms(self, room_ids: Sequence[int]) -> None:
+        """Clean rooms (deebot-client room ids) in this order."""
+        await self._async_run(
+            "clean_rooms",
+            self._clean(rooms_payloads(room_ids, self._clean_count)),
+            None,
+            self._optimistic(State.CLEANING),
+        )
+
+    async def async_clean_zone(
+        self, zones: Any, rooms: Any = None, **kwargs: Any
+    ) -> None:
+        """Clean rectangles (map millimetres) and optionally rooms in one job."""
+        rectangles = _rectangles(zones)
+        room_ids = _int_list(rooms, "rooms") if rooms else []
+        payloads = zone_payloads(rectangles, room_ids, self._clean_count)
+        await self._async_run(
+            "clean_zone",
+            self._clean(payloads),
+            None,
+            self._optimistic(State.CLEANING),
+        )
+
+    async def async_start_scenario(self, scenario_id: str, **kwargs: Any) -> None:
+        """Start a saved scenario (quick command) of the app."""
+        await self._async_run(
+            "start_scenario",
+            self._single(lambda: scenario_command(str(scenario_id))),
+            None,
+            self._optimistic(State.CLEANING),
+        )
 
     @override
     async def async_send_command(
@@ -233,37 +543,25 @@ class EcovacsVacuum(
             )
 
         if command in ["spot_area", "custom_area"]:
-            if params is None:
+            key = "rooms" if command == "spot_area" else "coordinates"
+            if key not in params:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="vacuum_send_command_params_required",
                     translation_placeholders={"command": command},
                 )
             if self._capability.clean.action.area is None:
-                info = self._device.device_info
-                name = info.get("nick", info["name"])
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="vacuum_send_command_not_supported",
-                    translation_placeholders={"command": command, "name": name},
+                    translation_placeholders={"command": command, "name": self._name()},
                 )
-
+            if "cleanings" in params:
+                self._clean_count = int(params["cleanings"])
             if command == "spot_area":
-                await self._device.execute_command(
-                    self._capability.clean.action.area(
-                        CleanMode.SPOT_AREA,
-                        params["rooms"],
-                        params.get("cleanings", 1),
-                    )
-                )
-            elif command == "custom_area":
-                await self._device.execute_command(
-                    self._capability.clean.action.area(
-                        CleanMode.CUSTOM_AREA,
-                        params["coordinates"],
-                        params.get("cleanings", 1),
-                    )
-                )
+                await self.async_clean_rooms(_int_list(params["rooms"], "rooms"))
+            else:
+                await self.async_clean_zone(params["coordinates"])
         else:
             await self._device.execute_command(
                 self._capability.custom.set(command, params)
@@ -284,6 +582,8 @@ class EcovacsVacuum(
             )
 
         return await self._device.execute_command(position_commands[0])
+
+    # --------------------------------------------------------- segments
 
     @callback
     def _check_segments_changed(self) -> None:
@@ -327,10 +627,11 @@ class EcovacsVacuum(
         segments = [
             seg for seg in last_seen if _split_composite_id(seg.id)[0] in other_map_ids
         ]
+        language = self._language()
         segments.extend(
             Segment(
                 id=f"{id_prefix}{room.id}",
-                name=room.name,
+                name=room_name(room, language),
                 group=map_obj.name,
             )
             for room in self._room_event.rooms
@@ -346,13 +647,37 @@ class EcovacsVacuum(
     async def async_clean_segments(self, segment_ids: list[str], **kwargs: Any) -> None:
         """Perform an area clean.
 
-        Only cleans segments from the currently selected map.
+        Only cleans segments from the currently selected map. While the cloud
+        cannot reach the robot, the Home Assistant areas of the segments are
+        cleaned by the Matter twin (both vacuums need an area mapping).
         """
+
+        def local() -> LocalCall:
+            fallback = self._extras.fallback
+            try:
+                areas = matter_area_ids(
+                    self.hass, self.entity_id, str(fallback.entity_id), segment_ids
+                )
+            except LookupError as err:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="local_fallback_area_not_mapped",
+                    translation_placeholders={
+                        "segment": str(err),
+                        "entity_id": str(fallback.entity_id),
+                    },
+                ) from None
+            return "clean_area", {"cleaning_area_id": areas}
+
+        if self._use_local():
+            await self._async_local("clean_area", local)
+            return
+
         if not self._maps:
             _LOGGER.warning("No map information available, cannot clean segments")
             return
 
-        valid_room_ids: list[int | float] = []
+        valid_room_ids: list[int] = []
         for composite_id in segment_ids:
             map_id, segment_id = _split_composite_id(composite_id)
             if (map_obj := self._maps.get(map_id)) is None:
@@ -360,7 +685,7 @@ class EcovacsVacuum(
                 continue
 
             if not map_obj.using:
-                room_name = next(
+                room = next(
                     (
                         segment.name
                         for segment in self.last_seen_segments or []
@@ -371,7 +696,7 @@ class EcovacsVacuum(
                 _LOGGER.warning(
                     'Map "%s" is not currently selected, skipping segment "%s" (%s)',
                     map_obj.name,
-                    room_name,
+                    room,
                     segment_id,
                 )
                 continue
@@ -385,16 +710,11 @@ class EcovacsVacuum(
             )
             return
 
-        if TYPE_CHECKING:
-            # Supported feature is only added if clean.action.area is not None
-            assert self._capability.clean.action.area is not None
-
-        await self._device.execute_command(
-            self._capability.clean.action.area(
-                CleanMode.SPOT_AREA,
-                valid_room_ids,
-                self._clean_count,
-            )
+        await self._async_run(
+            "clean_area",
+            self._clean(rooms_payloads(valid_room_ids, self._clean_count)),
+            local,
+            self._optimistic(State.CLEANING),
         )
 
 

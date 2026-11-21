@@ -52,16 +52,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: EcovacsConfigEntry) -> N
 
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Probes and listeners of the extra features; entities of supported
+    # features are added by the platforms when the robot answered
+    controller.start_extras()
 
 
 async def _async_entry_updated(hass: HomeAssistant, entry: EcovacsConfigEntry) -> None:
-    """Apply changed live view options.
+    """Apply changed options.
 
     The entry is also updated when deebot-client renews the stored account
     credentials, so this must not reload the entry.
     """
-    if (live_view := entry.runtime_data.live_view) is not None:
+    controller = entry.runtime_data
+    if (live_view := controller.live_view) is not None:
         live_view.update_options(entry.options)
+    for extras in controller.extras.values():
+        extras.redraw_map()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: EcovacsConfigEntry) -> None:

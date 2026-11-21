@@ -2,7 +2,8 @@
 
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
 see NOTICE. Changes: removed the legacy (XMPP) entities, added the live view
-status sensor (from ECOVACS Live View, MIT).
+status sensor (from ECOVACS Live View, MIT), the robot position sensors
+(created when the robot reports a position) and the local fallback sensor.
 """
 
 from collections.abc import Callable, Mapping
@@ -32,12 +33,15 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     ATTR_BATTERY_LEVEL,
     CONF_DESCRIPTION,
+    DEGREE,
     PERCENTAGE,
     EntityCategory,
     UnitOfArea,
+    UnitOfLength,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import UNDEFINED, StateType, UndefinedType
 
@@ -47,8 +51,12 @@ from .entity import (
     EcovacsCapabilityEntityDescription,
     EcovacsDescriptionEntity,
     EcovacsEntity,
+    EcovacsExtrasEntity,
     EcovacsLiveViewEntity,
+    async_add_feature_entities,
 )
+from .extras import FEATURE_POSITION, DeviceExtras
+from .local_fallback import STATUS_AVAILABLE, STATUS_NOT_FOUND, STATUS_UNAVAILABLE
 from .util import get_name_key, get_options, get_supported_entities
 
 
@@ -225,6 +233,41 @@ LIFESPAN_ENTITY_DESCRIPTIONS = tuple(
 )
 
 
+@dataclass(kw_only=True, frozen=True)
+class EcovacsPositionSensorEntityDescription(SensorEntityDescription):
+    """Robot position sensor (map millimetres, as getPos reports them)."""
+
+    value_fn: Callable[[Mapping[str, Any]], StateType]
+
+
+POSITION_ENTITY_DESCRIPTIONS: tuple[EcovacsPositionSensorEntityDescription, ...] = (
+    EcovacsPositionSensorEntityDescription(
+        key="position_x",
+        translation_key="position_x",
+        value_fn=lambda value: value.get("x"),
+        native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+        entity_registry_enabled_default=False,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    EcovacsPositionSensorEntityDescription(
+        key="position_y",
+        translation_key="position_y",
+        value_fn=lambda value: value.get("y"),
+        native_unit_of_measurement=UnitOfLength.MILLIMETERS,
+        entity_registry_enabled_default=False,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    EcovacsPositionSensorEntityDescription(
+        key="position_angle",
+        translation_key="position_angle",
+        value_fn=lambda value: value.get("a"),
+        native_unit_of_measurement=DEGREE,
+        entity_registry_enabled_default=False,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: EcovacsConfigEntry,
@@ -247,8 +290,22 @@ async def async_setup_entry(
         for device in controller.devices
         if (capability := device.capabilities.error)
     )
+    entities.extend(
+        EcovacsLocalFallbackSensor(device, controller.get_extras(device))
+        for device in controller.devices
+    )
 
     async_add_entities(entities)
+
+    def position_sensors(device: Device, extras: DeviceExtras) -> list[Entity]:
+        return [
+            EcovacsPositionSensor(device, extras, description)
+            for description in POSITION_ENTITY_DESCRIPTIONS
+        ]
+
+    async_add_feature_entities(
+        hass, config_entry, async_add_entities, {FEATURE_POSITION: position_sensors}
+    )
 
     if (live_view := controller.live_view) is not None:
         async_add_entities(
@@ -376,3 +433,55 @@ class EcovacsLiveViewStatusSensor(EcovacsLiveViewEntity, SensorEntity):
             "auto_stop_remaining_seconds": manager.get_auto_stop_remaining(self.did),
             "last_error": manager.errors.get(self.did),
         }
+
+
+class EcovacsPositionSensor(EcovacsExtrasEntity, SensorEntity):
+    """Robot position."""
+
+    entity_description: EcovacsPositionSensorEntityDescription
+    _value_key = FEATURE_POSITION
+
+    def _update_from_value(self, value: Any) -> None:
+        if isinstance(value, Mapping):
+            self._attr_native_value = self.entity_description.value_fn(value)
+
+
+class EcovacsLocalFallbackSensor(EcovacsEntity[DeviceExtras], SensorEntity):
+    """Whether the robot's Matter twin can stand in for the cloud."""
+
+    _always_available = True
+    entity_description = SensorEntityDescription(
+        key="local_fallback",
+        translation_key="local_fallback",
+        device_class=SensorDeviceClass.ENUM,
+        options=[STATUS_AVAILABLE, STATUS_UNAVAILABLE, STATUS_NOT_FOUND],
+        entity_category=EntityCategory.DIAGNOSTIC,
+    )
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Follow the twin."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self._capability.fallback.async_subscribe(self._handle_change)
+        )
+
+    @callback
+    def _handle_change(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    @override
+    def native_value(self) -> str:
+        """Return the status of the twin."""
+        return self._capability.fallback.status
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the entity of the twin."""
+        return {"entity_id": self._capability.fallback.entity_id}
+
+    async def async_update(self) -> None:
+        """Look for the twin again."""
+        self._capability.fallback.async_rescan()

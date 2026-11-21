@@ -23,6 +23,14 @@ CONF_AUTO_STOP_MINUTES = "auto_stop_minutes"
 DEFAULT_AUTO_STOP_MINUTES = 10
 MAX_AUTO_STOP_MINUTES = 120
 
+# Map options
+CONF_SHOW_FURNITURE = "show_furniture"
+DEFAULT_SHOW_FURNITURE = True
+
+# Dispatcher signal (format with the config entry id): a robot feature turned
+# out to be supported, args: (did, feature key)
+SIGNAL_FEATURE_SUPPORTED = "ecovacs_t90s_feature_supported_{}"
+
 SUPPORTED_LIFESPANS = (
     LifeSpan.AIR_FRESHENER,
     LifeSpan.BLADE,

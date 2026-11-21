@@ -191,7 +191,11 @@ async def test_live_view_uses_shared_login(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    assert entry.options == {"live_view_pin": "1234", "auto_stop_minutes": 5}
+    assert entry.options == {
+        "live_view_pin": "1234",
+        "auto_stop_minutes": 5,
+        "show_furniture": True,
+    }
     assert entry.runtime_data is controller
     assert controller.live_view.manager.pin == "1234"
     assert controller.live_view.manager.auto_stop_minutes == 5

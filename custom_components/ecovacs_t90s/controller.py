@@ -3,12 +3,14 @@
 Derived from the Home Assistant core ``ecovacs`` integration (Apache-2.0),
 see NOTICE. Changes: removed the legacy XMPP (py-sucks) robots, register extra
 device classes before discovery, keep the REST configuration so the live view
-can share the login.
+can share the login, and create the runtime of the extra features
+(``extras.DeviceExtras``) for every robot.
 """
 
 import asyncio
 from collections.abc import Callable
 from dataclasses import asdict
+from datetime import datetime
 from functools import partial
 import logging
 import ssl
@@ -20,6 +22,7 @@ from deebot_client.authentication import (
     RestConfiguration,
     create_rest_config,
 )
+from deebot_client.commands.json.clean import CleanV2
 from deebot_client.const import UNDEFINED, UndefinedType
 from deebot_client.device import Device
 from deebot_client.events import FirmwareEvent, NetworkInfoEvent
@@ -48,10 +51,13 @@ from .const import (
     CONF_ACCOUNT_CREDENTIALS,
     CONF_OVERRIDE_MQTT_URL,
     CONF_OVERRIDE_REST_URL,
+    CONF_SHOW_FURNITURE,
     CONF_VERIFY_MQTT_CERTIFICATE,
+    DEFAULT_SHOW_FURNITURE,
     DOMAIN,
 )
-from .device_classes import async_register_extra_device_classes
+from .device_classes import STATUS_MAPPED, async_register_extra_device_classes
+from .extras import DeviceExtras, install_message_hook
 
 if TYPE_CHECKING:
     from .live_view_runtime import LiveViewRuntime
@@ -71,6 +77,7 @@ class EcovacsController:
         self._not_supported: list[ApiDeviceInfo] = []
         self._device_class_status: dict[str, str] = {}
         self._unsubscribe_device_events: list[Callable[[], None]] = []
+        self.extras: dict[str, DeviceExtras] = {}
         rest_url = config.get(CONF_OVERRIDE_REST_URL)
         self._device_id: str = config[CONF_DEVICE_ID]
         self._country: str = config[CONF_COUNTRY]
@@ -133,6 +140,11 @@ class EcovacsController:
 
                     async def _init(device: Device) -> None:
                         """Initialize MQTT device."""
+                        extras = self._create_extras(device)
+                        # Before initialize, which subscribes the handler
+                        extras.message_hook_installed = install_message_hook(
+                            device, extras.handle_message
+                        )
                         await device.initialize(mqtt)
                         self._subscribe_device_info_events(device)
                         self._devices.append(device)
@@ -176,6 +188,44 @@ class EcovacsController:
             ) from ex
 
         _LOGGER.debug("Controller initialize complete")
+
+    def _create_extras(self, device: Device) -> DeviceExtras:
+        """Create the runtime of the extra features of a robot."""
+        device_class = device.device_info["class"]
+        # The V2 clean commands are used first for mapped classes (the T90
+        # family rejects "clean" with 20003) and for robots whose deebot-client
+        # capabilities already use them.
+        prefer_v2 = self._device_class_status.get(
+            device_class
+        ) == STATUS_MAPPED or issubclass(
+            device.capabilities.clean.action.command, CleanV2
+        )
+        extras = DeviceExtras(self._hass, self._entry, device, prefer_v2=prefer_v2)
+        self.extras[device.device_info["did"]] = extras
+        return extras
+
+    def start_extras(self) -> None:
+        """Start the extra features (after the platforms are set up)."""
+        for extras in self.extras.values():
+            extras.async_start()
+
+    def get_extras(self, device: Device) -> DeviceExtras:
+        """Return the extra features runtime of a robot."""
+        return self.extras[device.device_info["did"]]
+
+    @property
+    def show_furniture(self) -> bool:
+        """Return whether furniture is drawn on the map."""
+        return bool(
+            self._entry.options.get(CONF_SHOW_FURNITURE, DEFAULT_SHOW_FURNITURE)
+        )
+
+    @property
+    def mqtt_last_message(self) -> datetime | None:
+        """Return when the last MQTT message of the account arrived."""
+        if self._mqtt_client is None:
+            return None
+        return self._mqtt_client.last_message_received_at
 
     async def _async_store_account_credentials(
         self, account: AccountCredentials
@@ -228,6 +278,8 @@ class EcovacsController:
         self._unsubscribe_account_credentials()
         for unsubscribe in self._unsubscribe_device_events:
             unsubscribe()
+        for extras in self.extras.values():
+            extras.async_stop()
         for device in self._devices:
             await device.teardown()
         if self._mqtt_client is not None:

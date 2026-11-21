@@ -1,6 +1,12 @@
 {
   "entity": {
     "binary_sensor": {
+      "cloud_connected": {
+        "default": "mdi:cloud-off-outline",
+        "state": {
+          "on": "mdi:cloud-check-outline"
+        }
+      },
       "water_mop_attached": {
         "default": "mdi:water-off",
         "state": {
@@ -84,6 +90,9 @@
       "start_live_view": {
         "default": "mdi:cctv"
       },
+      "start_scenario": {
+        "default": "mdi:play-box-outline"
+      },
       "station_action_clean_base": {
         "default": "mdi:home"
       },
@@ -95,6 +104,12 @@
       },
       "station_action_wash_mop": {
         "default": "mdi:water-sync"
+      },
+      "station_stop_dry_mop": {
+        "default": "mdi:fan-off"
+      },
+      "station_stop_wash_mop": {
+        "default": "mdi:stop-circle-outline"
       },
       "stop_live_view": {
         "default": "mdi:stop-circle-outline"
@@ -108,6 +123,11 @@
     "event": {
       "last_job": {
         "default": "mdi:history"
+      }
+    },
+    "image": {
+      "last_clean_map": {
+        "default": "mdi:map-clock-outline"
       }
     },
     "number": {
@@ -134,8 +154,26 @@
       "auto_empty": {
         "default": "mdi:delete-empty"
       },
+      "cleaning_speed": {
+        "default": "mdi:speedometer"
+      },
+      "drying_duration": {
+        "default": "mdi:timer-sand"
+      },
+      "edge_mopping": {
+        "default": "mdi:arrow-expand-horizontal"
+      },
       "efficiency_mode": {
         "default": "mdi:leaf"
+      },
+      "scenario": {
+        "default": "mdi:playlist-play"
+      },
+      "true_detect_sensitivity": {
+        "default": "mdi:radar"
+      },
+      "wash_temperature": {
+        "default": "mdi:thermometer-water"
       },
       "water_amount": {
         "default": "mdi:water"
@@ -220,6 +258,12 @@
       "live_view_status": {
         "default": "mdi:cctv"
       },
+      "local_fallback": {
+        "default": "mdi:lan-disconnect",
+        "state": {
+          "available": "mdi:lan-connect"
+        }
+      },
       "network_ip": {
         "default": "mdi:ip-network-outline"
       },
@@ -228,6 +272,15 @@
       },
       "network_ssid": {
         "default": "mdi:wifi"
+      },
+      "position_angle": {
+        "default": "mdi:compass-outline"
+      },
+      "position_x": {
+        "default": "mdi:axis-x-arrow"
+      },
+      "position_y": {
+        "default": "mdi:axis-y-arrow"
       },
       "station_state": {
         "default": "mdi:home"
@@ -291,29 +344,47 @@
       "cross_map_border_warning": {
         "default": "mdi:border-none-variant"
       },
+      "do_not_disturb": {
+        "default": "mdi:minus-circle-outline"
+      },
       "live_view": {
         "default": "mdi:cctv-off",
         "state": {
           "on": "mdi:cctv"
         }
       },
+      "mop_only": {
+        "default": "mdi:water"
+      },
       "move_up_warning": {
         "default": "mdi:arrow-up-bold-box-outline"
+      },
+      "ota_auto_update": {
+        "default": "mdi:update"
       },
       "safe_protect": {
         "default": "mdi:shield-half-full"
       },
       "true_detect": {
         "default": "mdi:laser-pointer"
+      },
+      "voice_assistant": {
+        "default": "mdi:microphone-message"
       }
     }
   },
   "services": {
+    "clean_zone": {
+      "service": "mdi:select-drag"
+    },
     "raw_command": {
       "service": "mdi:console"
     },
     "raw_get_positions": {
       "service": "mdi:map-marker-radius-outline"
+    },
+    "start_scenario": {
+      "service": "mdi:play-box-outline"
     }
   }
 }

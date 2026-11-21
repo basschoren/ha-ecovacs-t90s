@@ -2,10 +2,11 @@
 
 ``EcovacsEntity`` and friends are derived from the Home Assistant core
 ``ecovacs`` integration (Apache-2.0), see NOTICE. Changes: removed the legacy
-(XMPP) entity, added ``EcovacsLiveViewEntity`` for the live view entities.
+(XMPP) entity, added ``EcovacsLiveViewEntity`` for the live view entities and
+``EcovacsExtrasEntity`` plus helpers for the entities of extra features.
 """
 
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 
@@ -14,13 +15,21 @@ from deebot_client.device import Device
 from deebot_client.events import AvailabilityEvent
 from deebot_client.events.base import Event
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity, EntityDescription
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
+from .commands.base import CommandOutcome, T90Command
+from .const import DOMAIN, SIGNAL_FEATURE_SUPPORTED
 
 if TYPE_CHECKING:
+    from .commands.settings import SettingSpec
+    from .extras import DeviceExtras
     from .live_view_runtime import LiveViewRuntime
 
 
@@ -165,3 +174,92 @@ class EcovacsLiveViewEntity(Entity):
         self.async_on_remove(
             self._live_view.manager.subscribe(self.async_write_ha_state)
         )
+
+
+type FeatureFactory = Callable[[Device, DeviceExtras], list[Entity]]
+
+
+@callback
+def async_add_feature_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    factories: Mapping[str, FeatureFactory],
+) -> None:
+    """Add entities of extra features as soon as the robot supports them."""
+    controller = entry.runtime_data
+    added: set[tuple[str, str]] = set()
+
+    @callback
+    def add(did: str, key: str) -> None:
+        if (factory := factories.get(key)) is None or (did, key) in added:
+            return
+        if (device := controller.get_device(did)) is None:
+            return
+        added.add((did, key))
+        if entities := factory(device, controller.extras[did]):
+            async_add_entities(entities)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_FEATURE_SUPPORTED.format(entry.entry_id), add
+        )
+    )
+    for did, extras in controller.extras.items():
+        for key in extras.supported_features():
+            add(did, key)
+
+
+def raise_for_outcome(command: T90Command, name: str) -> None:
+    """Raise if a robot command did not succeed."""
+    if command.outcome is CommandOutcome.OK:
+        return
+    if command.outcome.is_connection_problem:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="robot_unreachable",
+            translation_placeholders={"name": name, "reason": str(command.outcome)},
+        )
+    raise HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="command_rejected",
+        translation_placeholders={"command": command.NAME, "code": str(command.code)},
+    )
+
+
+class EcovacsExtrasEntity(EcovacsDescriptionEntity["DeviceExtras"]):
+    """Entity of an extra feature, following one value of the extras runtime.
+
+    Cloud-only: unavailable while deebot-client reports the robot unavailable.
+    """
+
+    _value_key: str
+    _spec: SettingSpec | None = None
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Follow the value."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self._capability.async_subscribe(self._value_key, self._handle_value)
+        )
+        self._update_from_value(self._capability.values.get(self._value_key))
+
+    @callback
+    def _handle_value(self) -> None:
+        self._update_from_value(self._capability.values.get(self._value_key))
+        self.async_write_ha_state()
+
+    def _update_from_value(self, value: Any) -> None:
+        """Update the entity attributes from the value."""
+        raise NotImplementedError
+
+    @property
+    def _robot_name(self) -> str:
+        info = self._device.device_info
+        return info.get("nick") or info["name"]
+
+    async def async_update(self) -> None:
+        """Read the setting again (generic entity update service)."""
+        if self._spec is not None:
+            await self._capability.async_refresh(self._spec)
