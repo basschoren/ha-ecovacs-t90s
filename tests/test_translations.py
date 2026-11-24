@@ -55,6 +55,6 @@ def test_services_and_icons_translated() -> None:
 def test_manifest() -> None:
     """Version and the optional Matter ordering."""
     manifest = _load("manifest.json")
-    assert manifest["version"] == "0.2.0"
+    assert manifest["version"] == "1.0.0"
     assert manifest["after_dependencies"] == ["matter"]
     assert "dependencies" not in manifest

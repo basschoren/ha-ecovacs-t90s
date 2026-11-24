@@ -28,7 +28,7 @@ and one device per robot:
 
 You log in once; the robot control and the live view share that login.
 
-> Status: phase 2 (version 0.2.0). Verified on a real T90S so far: setup,
+> Status: version 1.0.0 (phase 2). Verified on a real T90S so far: setup,
 > start (`clean_V2`), return to dock, state updates, the furniture answer and
 > the answers of the settings listed below. Everything else is tested with
 > mocked APIs only; see "What is verified".
