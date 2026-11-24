@@ -339,7 +339,8 @@ The tests use `pytest-homeassistant` of the same version as Home Assistant and
 mock all Ecovacs APIs:
 
 ```bash
-pip install pytest-homeassistant==2026.11.2 deebot-client==18.7.0
+pip install pytest-homeassistant==2026.11.2 deebot-client==18.7.0 \
+    aiortc==1.16.0 websockets==15.0.1 numpy PyTurboJPEG av
 pytest tests
 ```
 
